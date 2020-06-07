@@ -28,18 +28,21 @@ nltk.download("wordnet")
 
 class VariableSimilarityCalculator:
 
-    def __init__(self, filter_data, data, data_cols, pairable):
+    def __init__(self, filter_data, data, data_cols, pairable, top_n=None, top_n_group=None):
         """
 
         :param filter_data: a pandas data frame containing variable information used to filter results
         containing the processed question definition
         :param data: pandas data frame containing variable information
         :param data_cols:
+        :param top_n: number of results to return for each variable
         """
         self.data_cols = data_cols
         self.filter_data = filter_data
         self.data = data
         self.pairable = pairable
+        self.top_n = top_n or len(data.index) -  1  # len(data) - 1  #
+        self.top_n_group = top_n_group
 
     def preprocessor(self, id_col, defn_col):
         """
@@ -93,7 +96,11 @@ class VariableSimilarityCalculator:
         else:
             return vocab_dict
 
-    def similarity_search(self, tfidf_matrix, ref_var_index, top_n):
+    def calculate_top_similarity(self):
+
+        return None
+
+    def similarity_search(self, tfidf_matrix, ref_var_index):
         """
         The function calculates the cosine similarity between the index variables and all other included variables in
         the matrix. The results are sorted and returned as a list of lists, where each list contains a variable
@@ -103,7 +110,6 @@ class VariableSimilarityCalculator:
         :param tfidf_matrix: where each row represents a variables and each column represents a word and counts are
         weighted by TF-IDF- matrix is n variable (row) X N all unique words in all documentation (cols)
         :param ref_var_index: an integer representing a variable id
-        :param top_n: an integer representing the number of similar variables to return
         :return: a list of lists where each list contains a variable identifier and the cosine similarity
             score the top set of similar as indicated by the input argument are returned
         """
@@ -143,7 +149,7 @@ class VariableSimilarityCalculator:
             cache.to_csv(file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
             return cache
 
-    def row_func(self, row_idx, row, corpus, tfidf_matrix, top_n, var_idx, my_cols, cache,
+    def row_func(self, row_idx, row, corpus, tfidf_matrix, var_idx, my_cols, cache,
                  matches):
         if var_idx:
             matches += 1
@@ -156,7 +162,7 @@ class VariableSimilarityCalculator:
                                doc_id_1, d1,
                                corpus[index][0], self.data[self.data_cols].iloc([index]),
                                score)
-             for index, score in self.similarity_search(tfidf_matrix, ref_var_index, top_n)
+             for index, score in self.similarity_search(tfidf_matrix, ref_var_index)
              if score > 0 and self.pairable(self.data, index, self.filter_data, row_idx)]
 
     def score_variables(self, score_name, corpus, tfidf_matrix, file_name, id_col):
@@ -173,8 +179,6 @@ class VariableSimilarityCalculator:
         counts  are weighted by TF-IDF
         :return: pandas data frame of the top_n (as specified by user) results for each variable
         """
-
-        top_n = len(self.data) - 1  # number of results to return for each variable
 
         my_cols = [id_col[0], id_col[0].replace("_1", "_2"), score_name]
 
@@ -193,7 +197,7 @@ class VariableSimilarityCalculator:
             var = str(row[str(id_col[0])])
             # get index of filter data in corpus
             var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
-            self.row_func(i, row, corpus, tfidf_matrix, top_n, var_idx, my_cols, cache, matches)
+            self.row_func(i, row, corpus, tfidf_matrix, var_idx, my_cols, cache, matches)
 
         pbar.finish()
 
