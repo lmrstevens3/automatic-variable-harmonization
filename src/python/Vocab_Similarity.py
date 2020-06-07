@@ -26,9 +26,9 @@ nltk.download("wordnet")
 
 
 class CorpusBuilder:
-    def __init__(self, defn_col):
+    def __init__(self, doc_col):
 
-        self.doc_col = defn_col
+        self.doc_col = doc_col
         self.tokenizer = RegexpTokenizer(r"\w+")
         self.lemmatizer = WordNetLemmatizer()
         self.tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
@@ -41,11 +41,11 @@ class CorpusBuilder:
         doc = " ".join([str(i) for i in doc_list])
 
         # tokenize & remove punctuation
-        tok_punc_defn = self.tokenizer.tokenize(doc.lower())
+        tok_punc_doc = self.tokenizer.tokenize(doc.lower())
 
         # remove stop words & lemmatize
         doc_lemma = [str(self.lemmatizer.lemmatize(x))
-                     for x in tok_punc_defn
+                     for x in tok_punc_doc
                      if all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english")]
 
         return var, doc_lemma
@@ -76,8 +76,10 @@ class CorpusBuilder:
         # widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
         # pbar = ProgressBar(widgets=widgets, maxval=len(data))
 
+        cols = list(self.doc_col)
+        cols.append(id_col)
         var_doc_list = [self.lemmatize_variable_documentation(row[len(self.doc_col)], row[:-1])
-                        for row in data[list(self.doc_col).append(id_col)].to_numpy()]
+                        for row in data[cols].as_matrix()]
 
         # pbar.finish()
 
@@ -307,21 +309,21 @@ def main():
 
     id_col = "varDocID_1"
 
-    "FHS_CHS_MESA_ARIC_text_similarity_scores"
-
     save_dir = "tiff_laura_shared/NLP text Score results/"
-    file_name_format = save_dir + "FHS_CHS_MESA_ARIC_text_similarity_scores_%s_ManuallyMappedConceptVars_7.17.19.csv"
-
+    # file_name_format = save_dir + "FHS_CHS_MESA_ARIC_text_similarity_scores_%s_ManuallyMappedConceptVars_7.17.19.csv"
+    file_name_format = save_dir + "test_%s_vocab_similarity.csv"
     disjoint_col = 'dbGaP_studyID_datasetID_1'
     data_cols_to_keep = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
                          'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
 
     filter_data_cols_to_keep = data_cols_to_keep
 
+    my_pred = lambda s1, i1, s2, i2: vals_differ_in_col(disjoint_col)(s1, i1, s2, i2) and val_in_any_row_for_col(disjoint_col)(s1, i1, s2, i2)
+
     # SCORE DATA + WRITE OUT RESULTS
     calc = VariableSimilarityCalculator(data, id_col,
-                                        filter_data=filter_data,
-                                        pairable=vals_differ_in_col(disjoint_col),
+                                        filter_data=None,  # filter_data
+                                        pairable=my_pred,
                                         data_cols_to_keep=data_cols_to_keep,
                                         filter_data_cols_to_keep=filter_data_cols_to_keep)
 
@@ -331,8 +333,8 @@ def main():
     corpus_builder = CorpusBuilder(doc_col)
     corpus_builder.build_corpus(calc.data, calc.id_col)
     corpus_builder.calc_tfidf()
-    print '\n' + score_name + " tfidf_matrix size:"
-    print corpus_builder.tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
+
+    print '\n%s tfidf_matrix size %s' % (score_name, str(corpus_builder.tfidf_matrix.shape))
 
     calc.init_cache(score_name, file_name)
 
@@ -390,9 +392,9 @@ def main():
 if __name__ == "__main__":
     main()
 
-varDocFile = "tiff_laura_shared/FHS_CHS_ARIC_MESA_varDoc_dbGaPxmlExtract_timeIntervalAdded_May19_NLPversion.csv"
-manualMappedVarsFile = "data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv"
-# READ IN DATA -- 07.17.19
-testData = pd.read_csv(varDocFile, sep=",", quotechar='"', na_values="",
+    varDocFile = "tiff_laura_shared/FHS_CHS_ARIC_MESA_varDoc_dbGaPxmlExtract_timeIntervalAdded_May19_NLPversion.csv"
+    manualMappedVarsFile = "data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv"
+    # READ IN DATA -- 07.17.19
+    testData = pd.read_csv(varDocFile, sep=",", quotechar='"', na_values="",
                        low_memory=False)  # when reading in data, check
-#  to see if there is "\r" if # not then don't use "lineterminator='\n'", otherwise u
+    #  to see if there is "\r" if # not then don't use "lineterminator='\n'", otherwise u
