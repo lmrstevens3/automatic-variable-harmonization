@@ -27,11 +27,15 @@ nltk.download("wordnet")
 
 class CorpusBuilder:
     def __init__(self, defn_col):
+
         self.doc_col = defn_col
         self.tokenizer = RegexpTokenizer(r"\w+")
         self.lemmatizer = WordNetLemmatizer()
+        self.tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2", lowercase=False)
+        self.tfidf_matrix = None
+        self.corpus = None
 
-    def sdfsad(self, var, doc_list):
+    def lemmatize_variable_documentation(self, var, doc_list):
         # if doc_col is multiple columns,  concatenate text from all columns
         doc = " ".join([str(i) for i in doc_list])
 
@@ -45,6 +49,17 @@ class CorpusBuilder:
 
         return var, doc_lemma
 
+    def calc_tfidf(self):
+        """
+        Create a matrix where each row represents a variables and each column represents a word and counts are
+        weighted by TF-IDF- matrix is n variable (row) X N all unique words in all documentation (cols)
+        :return:
+        """
+        # BUILD TF-IDF VECTORIZER
+
+        # CREATE MATRIX AND VECTORIZE DATA
+        self.tfidf_matrix =  self.tf.fit_transform([content for var, content in self.corpus])
+
     def build_corpus(self, data, id_col):
         """
         Using the data and defn_col lists, the function assembles an identifier and text string for each row in data.
@@ -57,10 +72,11 @@ class CorpusBuilder:
         containing the processed question definition
         """
 
-        widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
+        # widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
         # pbar = ProgressBar(widgets=widgets, maxval=len(data))
 
-        var_doc_list = [self.sdfsad(row[len(self.doc_col)], row[:-1]) for row in zip(data[self.doc_col.append(id_col)])]
+        var_doc_list = [self.lemmatize_variable_documentation(row[len(self.doc_col)], row[:-1])
+                        for row in data[list(self.doc_col).append(id_col)].to_numpy()]
 
         # pbar.finish()
 
@@ -69,7 +85,7 @@ class CorpusBuilder:
             matched = round(len(var_doc_list) / float(len(data)) * 100, 2)
             raise ValueError('There is a problem - Only matched {0}% of variables were processed'.format(matched))
         else:
-            return var_doc_list
+            self.corpus = var_doc_list
 
 
 class VariableSimilarityCalculator:
@@ -98,22 +114,21 @@ class VariableSimilarityCalculator:
     def calculate_top_similarity(self):
         return self.top_n
 
-    def similarity_search(self, tfidf_matrix, ref_var_index):
+    def similarity_search(self, corpus_builder, ref_var_index):
         """
         The function calculates the cosine similarity between the index variables and all other included variables in
         the matrix. The results are sorted and returned as a list of lists, where each list contains a variable
         identifier and the cosine similarity score for the top set of similar variables as indicated by the input
         argument are returned.
 
-        :param tfidf_matrix: where each row represents a variables and each column represents a word and counts are
-        weighted by TF-IDF- matrix is n variable (row) X N all unique words in all documentation (cols)
+        :param corpus_builder:
         :param ref_var_index: an integer representing a variable id
         :return: a list of lists where each list contains a variable identifier and the cosine similarity
             score the top set of similar as indicated by the input argument are returned
         """
 
         # calculate similarity
-        cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix).flatten()
+        cosine_similarities = linear_kernel(corpus_builder.tfidf_matrix[ref_var_index:ref_var_index + 1], corpus_builder.tfidf_matrix).flatten()
         rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
         similar_variables = itertools.islice(
             ((i, cosine_similarities[i]) for i in rel_var_indices),
@@ -149,29 +164,25 @@ class VariableSimilarityCalculator:
             self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
         print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
-    def row_func(self, row_idx, row, corpus, tfidf_matrix, var_idx, matches):
+    def row_func(self, row_idx, row, corpus_builder, var_idx, matches):
         if var_idx:
             matches += 1
             ref_var_index = var_idx[0]
-            doc_id_1 = corpus[ref_var_index][0]
+            doc_id_1 = corpus_builder.corpus[ref_var_index][0]
             d1 = row[self.data_cols]
 
             # retrieve top_n similar variables
             [self.append_cache(doc_id_1, d1,
-                               corpus[index][0], self.data[self.data_cols].iloc([index]),
+                               corpus_builder.corpus[index][0], self.data[self.data_cols].iloc([index]),
                                score)
-             for index, score in self.similarity_search(tfidf_matrix, ref_var_index)
+             for index, score in self.similarity_search(corpus_builder, ref_var_index)
              if score > 0 and self.pairable(self.data, index, self.filter_data, row_idx)]
 
-    def score_variables(self, corpus, tfidf_matrix):
+    def score_variables(self, corpus_builder):
         """
         The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
         with a score, for each variable as a pandas data frame.
 
-        :param corpus: a list of lists, where the first item in each list is the identifier and the second item is a l
-        ist containing the processed question definition
-        :param tfidf_matrix: matrix where each row represents a variables and each column represents a concept and
-        counts  are weighted by TF-IDF
         :return: pandas data frame of the top_n (as specified by user) results for each variable
         """
 
@@ -188,8 +199,8 @@ class VariableSimilarityCalculator:
         for i, row in pbar(self.filter_data.iterrows()):
             var = str(row[str(self.id_col)])
             # get index of filter data in corpus
-            var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
-            self.row_func(i, row, corpus, tfidf_matrix, var_idx, matches)
+            var_idx = [x for x, y in enumerate(corpus_builder.corpus) if y[0] == var]
+            self.row_func(i, row, corpus_builder, var_idx, matches)
 
         pbar.finish()
 
@@ -204,23 +215,21 @@ class VariableSimilarityCalculator:
 
         print("Filtering matched " + str(matches) + " of " + str(len(self.filter_data)) + " variables")
 
-    def variable_similarity(self, score_name, corpus_builder):
+    def variable_similarity(self, file_name, score_name, doc_col):
         # PRE-PROCESS DATA & BUILD CORPORA
         # var_col and defn/units/codeLabels_col hold information from the data frame and are used when
         # processing the data
-        corpus = corpus_builder.build_corpus(self.data, self.id_col)
 
-        # BUILD TF-IDF VECTORIZER
-        tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2", lowercase=False)
-
-        # CREATE MATRIX AND VECTORIZE DATA
-        tfidf_matrix = tf.fit_transform([content for var, content in corpus])
+        corpus_builder = CorpusBuilder(doc_col)
+        corpus_builder.build_corpus(self.data, self.id_col)
+        corpus_builder.calc_tfidf()
         print '\n' + score_name + " tfidf_matrix size:"
-        print tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
+        print corpus_builder.tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
+
+        self.init_cache(score_name, file_name)
 
         # SCORE DATA + WRITE OUT RESULTS
-        scored = self.score_variables(corpus, tfidf_matrix)
-        return scored
+        return self.score_variables(corpus_builder)
 
 
 def merge_score_results(score_matrix1, score_matrix2, how):
@@ -296,44 +305,52 @@ def main():
 
     score_name = "score_desc"
     file_name = file_name_format % "descOnly"
-    corpus_builder = CorpusBuilder(["var_desc_1"])
+    doc_col = ["var_desc_1"]
+    corpus_builder = CorpusBuilder(doc_col)
+    corpus_builder.build_corpus(calc.data, calc.id_col)
+    corpus_builder.calc_tfidf()
+    print '\n' + score_name + " tfidf_matrix size:"
+    print corpus_builder.tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
+
     calc.init_cache(score_name, file_name)
-    scored = calc.variable_similarity(score_name, corpus_builder)
+
+    scored = calc.score_variables(corpus_builder)
+    # scored = calc.variable_similarity(file_name, score_name, doc_col)
     # len(scored) #4013114
 
     score_name = "score_codeLab"
     file_name = file_name_format % "codingOnly"
     corpus_builder = CorpusBuilder(["var_coding_labels_1"])
     calc.init_cache(score_name, file_name)
-    scored_coding = calc.variable_similarity(score_name, corpus_builder)
+    scored_coding = calc.variable_similarity(corpus_builder)
     # len(scored_coding)
 
     score_name = "score_units"
     file_name = file_name_format % "unitsOnly_ManuallyMappedConceptVars_7.17.19.csv"
     corpus_builder = CorpusBuilder(["units_1"])
     calc.init_cache(score_name, file_name)
-    scored_units = calc.variable_similarity(score_name, corpus_builder)
+    scored_units = calc.variable_similarity(corpus_builder)
     # len(scored_units)
 
     score_name = "score_descUnits"
     file_name = file_name_format % "descUnits_ManuallyMappedConceptVars_7.17.19.csv"
     corpus_builder = CorpusBuilder(["var_desc_1", "units_1"])
     calc.init_cache(score_name, file_name)
-    scored_desc_units = calc.variable_similarity(score_name, corpus_builder)
+    scored_desc_units = calc.variable_similarity(corpus_builder)
     # len(scored_desc_coding)  # 4013114
 
     score_name = "score_descCoding"
     file_name = file_name_format % "descCoding_ManuallyMappedConceptVars_7.17.19.csv"
     corpus_builder = CorpusBuilder(["var_desc_1", "var_coding_labels_1"])
     calc.init_cache(score_name, file_name)
-    scored_desc_coding = calc.variable_similarity(score_name, corpus_builder)
+    scored_desc_coding = calc.variable_similarity(corpus_builder)
     # len(scored_desc_coding)  # 4013114
 
     score_name = "score_descCodingUnits"
     file_name = file_name_format % "descCodingUnits_ManuallyMappedConceptVars_7.17.19.csv"
     corpus_builder = CorpusBuilder(["var_desc_1", "units_1", "var_coding_labels_1"])
     calc.init_cache(score_name, file_name)
-    scored_desc_coding_units = calc.variable_similarity(score_name, corpus_builder)
+    scored_desc_coding_units = calc.variable_similarity(corpus_builder)
     # len(scored_full) #scored_desc_lab
 
     # Merge scores files and write to merged file- CURRENTLY "SCORED" data frame is not returned
