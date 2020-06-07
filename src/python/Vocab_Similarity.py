@@ -391,7 +391,9 @@ def main():
 
     filter_data_cols_to_keep = data_cols_to_keep
 
-    my_pred = lambda s1, i1, s2, i2: vals_differ_in_col(disjoint_col)(s1, i1, s2, i2) and val_in_any_row_for_col(disjoint_col)(s1, i1, s2, i2)
+    my_pred = lambda s1, i1, s2, i2: all([f(s1, i1, s2, i2)
+                                          for f in [val_in_any_row_for_col(disjoint_col),
+                                                    vals_differ_in_col(disjoint_col)]])
 
     # SCORE DATA + WRITE OUT RESULTS
     calc = VariableSimilarityCalculator(data, id_col,
