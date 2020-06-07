@@ -18,7 +18,6 @@ from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
-from typing import List
 from nltk.stem import WordNetLemmatizer
 from progressbar import ProgressBar, FormatLabel, Percentage, Bar
 
@@ -28,7 +27,23 @@ nltk.download("wordnet")
 
 class CorpusBuilder:
     def __init__(self, defn_col):
-        self.defn_col = defn_col
+        self.doc_col = defn_col
+        self.tokenizer = RegexpTokenizer(r"\w+")
+        self.lemmatizer = WordNetLemmatizer()
+
+    def sdfsad(self, var, doc_list):
+        # if doc_col is multiple columns,  concatenate text from all columns
+        doc = " ".join([str(i) for i in doc_list])
+
+        # tokenize & remove punctuation
+        tok_punc_defn = self.tokenizer.tokenize(doc.lower())
+
+        # remove stop words & lemmatize
+        doc_lemma = [str(self.lemmatizer.lemmatize(x))
+                     for x in tok_punc_defn
+                     if all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english")]
+
+        return var, doc_lemma
 
     def build_corpus(self, data, id_col):
         """
@@ -43,42 +58,18 @@ class CorpusBuilder:
         """
 
         widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
-        pbar = ProgressBar(widgets=widgets, maxval=len(data))
+        # pbar = ProgressBar(widgets=widgets, maxval=len(data))
 
-        vocab_dict = []
+        var_doc_list = [self.sdfsad(row[len(self.doc_col)], row[:-1]) for row in zip(data[self.doc_col.append(id_col)])]
 
-        for index, row in pbar(data.iterrows()):
-            var = str(row[str(id_col[0])])
-
-            # if defn_col is multiple columns,  concatenate text from all columns
-            if len(self.defn_col) == 1:
-                defn = str(row[str(self.defn_col[0])])
-            else:
-                defn_cols = [str(i) for i in row[self.defn_col]]  # type: List[str]
-                defn = str(" ".join(defn_cols))
-
-            # lowercase
-            defn_lower = defn.lower()
-
-            # tokenize & remove punctuation
-            tok_punc_defn = RegexpTokenizer(r"\w+").tokenize(defn_lower)
-
-            # remove stop words & lemmatize
-            defn_lemma = []
-            for x in tok_punc_defn:
-                if all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english"):
-                    defn_lemma.append(str(WordNetLemmatizer().lemmatize(x)))
-
-            vocab_dict.append((var, defn_lemma))
-
-        pbar.finish()
+        # pbar.finish()
 
         # verify all rows were processed before returning data
-        if len(vocab_dict) != len(data):
-            matched = round(len(vocab_dict) / float(len(data)) * 100, 2)
+        if len(var_doc_list) != len(data):
+            matched = round(len(var_doc_list) / float(len(data)) * 100, 2)
             raise ValueError('There is a problem - Only matched {0}% of variables were processed'.format(matched))
         else:
-            return vocab_dict
+            return var_doc_list
 
 
 class VariableSimilarityCalculator:
@@ -100,7 +91,7 @@ class VariableSimilarityCalculator:
         self.top_n = top_n or len(data.index) - 1  # len(data) - 1  #
         self.top_n_group = top_n_group
         self.id_col = id_col
-        self.score_cols = [self.id_col[0], self.id_col[0].replace("_1", "_2")]
+        self.score_cols = [self.id_col, self.id_col.replace("_1", "_2")]
         self.cache = None
         self.file_name = None
 
@@ -195,7 +186,7 @@ class VariableSimilarityCalculator:
         pbar = ProgressBar(widgets=widgets, maxval=len(self.filter_data))
         matches = 0
         for i, row in pbar(self.filter_data.iterrows()):
-            var = str(row[str(self.id_col[0])])
+            var = str(row[str(self.id_col)])
             # get index of filter data in corpus
             var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
             self.row_func(i, row, corpus, tfidf_matrix, var_idx, matches)
@@ -289,7 +280,7 @@ def main():
     # filter_data_m.to_csv("CorrectConceptVariablesMapped_RandomID_12.02.18.csv", sep=",", encoding="utf-8",
     #                      index = False)
 
-    id_col = ["varDocID_1"]
+    id_col = "varDocID_1"
 
     "FHS_CHS_MESA_ARIC_text_similarity_scores"
 
