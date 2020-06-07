@@ -110,12 +110,12 @@ class VariableSimilarityCalculator:
 
         # calculate similarity
         cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix).flatten()
-        rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
+        rel_var_indices = [i for i in cosine_similarities.argsort() if i != ref_var_index]
         similar_variables = itertools.islice(
-            ((variable, cosine_similarities[variable]) for variable in rel_var_indices),
-            top_n)
+            ((i, cosine_similarities[i]) for i in rel_var_indices),
+            len(rel_var_indices) - self.top_n, len(rel_var_indices))
 
-        return similar_variables
+        return reversed(similar_variables)
 
     def init_cache(self, cache, cache_type, file_name):
         if cache_type == "file":
