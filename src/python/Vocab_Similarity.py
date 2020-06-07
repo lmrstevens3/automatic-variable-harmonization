@@ -169,24 +169,15 @@ def score_variables(score_name, id_col, data, filter_data, corpus, tfidf_matrix,
 
     matches = 0
 
-    columns = ["varDocID_1",
-                "study_1",
-                "studyID_datasetID_1",
-                "dbGaP_dataset_label_1",
-                "varID_1",
-                "var_desc_1",
-                "timeIntervalDbGaP_1",
-                "cohort_dbGaP_1",
-                "metadataID_2",
-                "study_2",
-                "studyID_datasetID_2",
-                "dbGaP_dataset_label_2",
-                "varID_2",
-                "var_desc_2",
-                "timeIntervalDbGaP_2",
-                "cohort_dbGaP_2",
-                score_name,
+    my_cols = [id_col,
+               id_col.replace("_1", "_2"),
+               score_name,
                "matchID"]
+    disjoint_col = 'dbGaP_studyID_datasetID_1'
+    data_cols = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
+                 'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
+
+    columns = list(my_cols).extend(data_cols)
 
     cache = init_cache_output(file_name, columns) # init_cache_output([]) for list cache
 
@@ -200,33 +191,32 @@ def score_variables(score_name, id_col, data, filter_data, corpus, tfidf_matrix,
         if var_idx:
             matches += 1
             docID = corpus[var_idx[0]][0]
-            study = row['study_1']
-            varID = row['varID_1']
-            dbGaP_studyID_datasetID = row['dbGaP_studyID_datasetID_1']
-            dbGaP_dataset_label = row['dbGaP_dataset_label_1']
-            var_desc = row["var_desc_1"]
-            timeIntervalDbGaP = row['timeIntervalDbGaP_1']
-            cohort_dbGaP = row['cohort_dbGaP_1']
-            conceptID = row["conceptID"]
+
+            d1 =  row[data_cols]
+
+            dbGaP_studyID_datasetID = row[disjoint_col]
 
             # retrieve top_n similar variables
             for index, score in similarity_search(tfidf_matrix, var_idx[0], top_n):
                 if score > 0:
-                    randID_2 = corpus[index][0]
-                    study_2 = data["study_1"][index]
-                    varID_2 = data["varID_1"][index]
-                    dbGaP_studyID_datasetID_2 = data['dbGaP_studyID_datasetID_1'][index]
-                    dbGaP_dataset_label_2 = data['dbGaP_dataset_label_1'][index]
-                    timeIntervalDbGaP_2 = data['timeIntervalDbGaP_1'][index]
-                    cohort_dbGaP_2 = data['cohort_dbGaP_1'][index]
-                    var_desc_2 = data["var_desc_1"][index]
-                    matchID= str(docID) + "_" + str(randID_2)
+
+                    docID_2 = corpus[index][0]
+
+
+                    d2 = data[data_cols][index]
+
+                    dbGaP_studyID_datasetID_2 = data[disjoint_col][index]
+
+
+                    matchID= str(docID) + "_" + str(docID_2)
+
+
                     if (dbGaP_studyID_datasetID_2 != dbGaP_studyID_datasetID):
-                        cache_output(cache,  [docID, conceptID, study, dbGaP_studyID_datasetID,
-                                              dbGaP_dataset_label, varID, var_desc, timeIntervalDbGaP,
-                                              cohort_dbGaP, randID_2, study_2, dbGaP_studyID_datasetID_2,
-                                              dbGaP_dataset_label_2, varID_2, var_desc_2, timeIntervalDbGaP_2,
-                                              cohort_dbGaP_2,score, matchID])
+                        d_all = pd.Series([docID, docID_2,  score, matchID],
+                                          my_cols)
+                        d_all = d_all.append(d1)
+                        d_all = d_all.append(d2)
+                        cache_output(cache, d_all)
 
     pbar.finish()
 
