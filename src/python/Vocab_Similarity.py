@@ -26,6 +26,60 @@ nltk.download('stopwords')
 nltk.download("wordnet")
 
 
+class CorpusBuilder:
+    def __init__(self, defn_col):
+        self.defn_col = defn_col
+
+    def build_corpus(self, data, id_col):
+        """
+        Using the data and defn_col lists, the function assembles an identifier and text string for each row in data.
+        The text string is then preprocessed by making all words lowercase, removing all punctuation,
+        tokenizing by word, removing english stop words, and lemmatized (via wordnet).
+        The function returns a list of lists,  where the first item in each list is the identifier and
+        the second item is a list containing the processed text.
+
+        :return: a list of lists, where the first item in each list is the identifier and the second item is a list
+        containing the processed question definition
+        """
+
+        widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
+        pbar = ProgressBar(widgets=widgets, maxval=len(data))
+
+        vocab_dict = []
+
+        for index, row in pbar(data.iterrows()):
+            var = str(row[str(id_col[0])])
+
+            # if defn_col is multiple columns,  concatenate text from all columns
+            if len(self.defn_col) == 1:
+                defn = str(row[str(self.defn_col[0])])
+            else:
+                defn_cols = [str(i) for i in row[self.defn_col]]  # type: List[str]
+                defn = str(" ".join(defn_cols))
+
+            # lowercase
+            defn_lower = defn.lower()
+
+            # tokenize & remove punctuation
+            tok_punc_defn = RegexpTokenizer(r"\w+").tokenize(defn_lower)
+
+            # remove stop words & lemmatize
+            defn_lemma = []
+            for x in tok_punc_defn:
+                if all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english"):
+                    defn_lemma.append(str(WordNetLemmatizer().lemmatize(x)))
+
+            vocab_dict.append((var, defn_lemma))
+
+        pbar.finish()
+
+        # verify all rows were processed before returning data
+        if len(vocab_dict) != len(data):
+            matched = round(len(vocab_dict) / float(len(data)) * 100, 2)
+            raise ValueError('There is a problem - Only matched {0}% of variables were processed'.format(matched))
+        else:
+            return vocab_dict
+
 class VariableSimilarityCalculator:
 
     def __init__(self, filter_data, data, data_cols, pairable, id_col,
@@ -47,58 +101,7 @@ class VariableSimilarityCalculator:
         self.top_n_group = top_n_group
         self.id_col = id_col
         self.cache_type = cache_type
-
-    def preprocessor(self, id_col, defn_col):
-        """
-        Using the data and defn_col lists, the function assembles an identifier and text string for each row in data.
-        The text string is then preprocessed by making all words lowercase, removing all punctuation,
-        tokenizing by word, removing english stop words, and lemmatized (via wordnet).
-        The function returns a list of lists,  where the first item in each list is the identifier and
-        the second item is a list containing the processed text.
-
-        :param id_col: list of columns used to assemble question identifier
-        :param defn_col: list of columns used to assemble variable definition/documentation
-        :return: a list of lists, where the first item in each list is the identifier and the second item is a list
-        containing the processed question definition
-        """
-
-        widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
-        pbar = ProgressBar(widgets=widgets, maxval=len(self.data))
-
-        vocab_dict = []
-
-        for index, row in pbar(self.data.iterrows()):
-            var = str(row[str(id_col[0])])
-
-            # if defn_col is multiple columns,  concatenate text from all columns
-            if len(defn_col) == 1:
-                defn = str(row[str(defn_col[0])])
-            else:
-                defn_cols = [str(i) for i in row[defn_col]]  # type: List[str]
-                defn = str(" ".join(defn_cols))
-
-            # lowercase
-            defn_lower = defn.lower()
-
-            # tokenize & remove punctuation
-            tok_punc_defn = RegexpTokenizer(r"\w+").tokenize(defn_lower)
-
-            # remove stop words & lemmatize
-            defn_lemma = []
-            for x in tok_punc_defn:
-                if all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english"):
-                    defn_lemma.append(str(WordNetLemmatizer().lemmatize(x)))
-
-            vocab_dict.append((var, defn_lemma))
-
-        pbar.finish()
-
-        # verify all rows were processed before returning data
-        if len(vocab_dict) != len(self.data):
-            matched = round(len(vocab_dict) / float(len(self.data)) * 100, 2)
-            raise ValueError('There is a problem - Only matched {0}% of variables were processed'.format(matched))
-        else:
-            return vocab_dict
+        self.score_cols = [self.id_col[0], self.id_col[0].replace("_1", "_2")]
 
     def calculate_top_similarity(self):
         return self.top_n
@@ -130,7 +133,7 @@ class VariableSimilarityCalculator:
         return similar_variables
 
     def init_cache(self, file_name, score_name):
-        self.score_cols = [self.id_col[0], self.id_col[0].replace("_1", "_2"), score_name]
+        self.score_cols = self.score_cols.append(score_name)
         self.file_name = file_name
         self.cache = pd.DataFrame([], index=list(self.score_cols).extend(self.data_cols))
         if self.cache_type == "file":
@@ -209,11 +212,11 @@ class VariableSimilarityCalculator:
 
         print("Filtering matched " + str(matches) + " of " + str(len(self.filter_data)) + " variables")
 
-    def variable_similarity(self, id_col, data_cols_list, score_name):
+    def variable_similarity(self, score_name, corpus_builder):
         # PRE-PROCESS DATA & BUILD CORPORA
         # var_col and defn/units/codeLabels_col hold information from the data frame and are used when
         # processing the data
-        corpus = self.preprocessor(id_col, data_cols_list)
+        corpus = corpus_builder.build_corpus(self.data, self.id_col)
 
         # BUILD TF-IDF VECTORIZER
         tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2", lowercase=False)
@@ -306,35 +309,39 @@ def main():
     calc = VariableSimilarityCalculator(filter_data, data, data_cols, vals_differ_in_col(disjoint_col), id_col)
 
     score_name = "score_desc"
+    corpus_builder = CorpusBuilder(["var_desc_1"])
     calc.init_cache(desc_file_out, score_name)
-    scored = calc.variable_similarity(id_col, ["var_desc_1"], score_name)
+    scored = calc.variable_similarity(score_name, corpus_builder)
     # len(scored) #4013114
 
     score_name = "score_codeLab"
+    corpus_builder = CorpusBuilder(["var_coding_labels_1"])
     calc.init_cache(coding_file_out, score_name)
-    scored_coding = calc.variable_similarity(id_col, ["var_coding_labels_1"], score_name)
+    scored_coding = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_coding)
 
     score_name = "score_units"
+    corpus_builder = CorpusBuilder(["units_1"])
     calc.init_cache(units_file_out, score_name)
-    scored_units = calc.variable_similarity(id_col, ["units_1"], score_name)
+    scored_units = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_units)
 
     score_name = "score_descUnits"
+    corpus_builder = CorpusBuilder(["var_desc_1", "units_1"])
     calc.init_cache(desc_units_file_out, score_name)
-    scored_desc_units = calc.variable_similarity(id_col, ["var_desc_1", "units_1"], score_name)
+    scored_desc_units = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_desc_coding)  # 4013114
 
     score_name = "score_descCoding"
+    corpus_builder = CorpusBuilder(["var_desc_1", "var_coding_labels_1"])
     calc.init_cache(desc_coding_file_out, score_name)
-    scored_desc_coding = calc.variable_similarity(id_col, ["var_desc_1", "var_coding_labels_1"],
-                                                  score_name)
+    scored_desc_coding = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_desc_coding)  # 4013114
 
     score_name = "score_descCodingUnits"
+    corpus_builder = CorpusBuilder(["var_desc_1", "units_1", "var_coding_labels_1"])
     calc.init_cache(all_file_out, score_name)
-    scored_desc_coding_units = calc.variable_similarity(id_col, ["var_desc_1", "units_1", "var_coding_labels_1"],
-                                                        score_name)
+    scored_desc_coding_units = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_full) #scored_desc_lab
 
     # Merge scores files and write to merged file- CURRENTLY "SCORED" data frame is not returned
