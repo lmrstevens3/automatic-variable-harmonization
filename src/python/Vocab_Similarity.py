@@ -12,6 +12,7 @@
 
 # read in needed libraries
 import itertools
+
 import nltk
 import pandas as pd
 from nltk.corpus import stopwords
@@ -20,10 +21,74 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 from nltk.stem import WordNetLemmatizer
 from progressbar import ProgressBar, FormatLabel, Percentage, Bar
+import numpy as np
+import scipy.sparse as sp
+
+from sklearn.utils.validation import check_array, FLOAT_DTYPES
+
 
 nltk.download('stopwords')
 nltk.download("wordnet")
 
+
+
+def _my_document_frequency(X):
+    """Count the number of non-zero values for each feature in sparse X."""
+    if sp.isspmatrix_csr(X):
+        return np.bincount(X.indices, minlength=X.shape[1])
+    else:
+        return np.diff(X.indptr)
+
+def my_fit(tfidf, X, y=None):
+    """Learn the idf vector (global term weights)
+
+    Parameters
+    ----------
+    X : sparse matrix, [n_samples, n_features]
+        a matrix of term/token counts
+    """
+    X = check_array(X, accept_sparse=('csr', 'csc'))
+    if not sp.issparse(X):
+        X = sp.csr_matrix(X)
+    dtype = X.dtype if X.dtype in FLOAT_DTYPES else np.float64
+
+    if tfidf.use_idf:
+        n_samples, n_features = X.shape
+        df = _my_document_frequency(X).astype(dtype)
+
+        # perform idf smoothing if required
+        df += int(tfidf.smooth_idf)
+        n_samples += int(tfidf.smooth_idf)
+
+        # log+1 instead of log makes sure terms with zero idf don't get
+        # suppressed entirely.
+        idf = np.log(n_samples / df) + 1
+        tfidf._idf_diag = sp.diags(idf, offsets=0,
+                                  shape=(n_features, n_features),
+                                  format='csr',
+                                  dtype=dtype)
+
+    return tfidf
+
+
+class MyTfidfVecctorizer(TfidfVectorizer):
+
+    def fit(self, raw_documents, y=None):
+        """Learn vocabulary and idf from training set.
+
+        Parameters
+        ----------
+        raw_documents : iterable
+            an iterable which yields either str, unicode or file objects
+
+        Returns
+        -------
+        self : TfidfVectorizer
+        """
+        self._check_params()
+        X = super(TfidfVectorizer, self).fit_transform(raw_documents)
+        my_fit(self._tfidf, X)
+        return self
 
 class CorpusBuilder:
     def __init__(self, doc_col):
@@ -33,8 +98,11 @@ class CorpusBuilder:
         self.lemmatizer = WordNetLemmatizer()
         self.tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
                                   lowercase=False)
+        self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
+                                     lowercase=False)
         self.tfidf_matrix = None
         self.corpus = None
+        self.corpora = None
 
     def lemmatize_variable_documentation(self, var, doc_list):
         # if doc_col is multiple columns,  concatenate text from all columns
@@ -59,7 +127,12 @@ class CorpusBuilder:
         # BUILD TF-IDF VECTORIZER
 
         # CREATE MATRIX AND VECTORIZE DATA
-        self.tfidf_matrix = self.tf.fit_transform([content for var, content in self.corpus])
+        self.fit = self.tf.fit([content for var, content in self.corpus])
+
+
+        # self.fit.transform([content for corpus in self.corpora for _, content in corpus])
+
+        self.tfidf_matrix = self.tf.fit_transform([content for _, content in self.corpus])
 
     def build_corpus(self, data, id_col):
         """
