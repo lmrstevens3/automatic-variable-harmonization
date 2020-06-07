@@ -88,7 +88,7 @@ def similarity_search(tfidf_matrix, ref_var_index, top_n):
 
     :param tfidf_matrix: where each row represents a variables and each column represents a word and counts are
     weighted by TF-IDF- matrix is n variable (row) X N all unique words in all documentation (cols)
-    :param index_var: an integer representing a variable id
+    :param ref_var_index: an integer representing a variable id
     :param top_n: an integer representing the number of similar variables to return
     :return: a list of lists where each list contains a variable identifier and the cosine similarity
         score the top set of similar as indicated by the input argument are returned
@@ -102,53 +102,51 @@ def similarity_search(tfidf_matrix, ref_var_index, top_n):
 
     return similar_variables
 
-def init_cache_output(cache, columns):
-    if (isinstance(cache, str)):
-        with open(cache, "w") as f:
-            f.write(",".join(columns))
+
+def init_cache(cache, cache_type, file_name):
+    if (cache_type == "file"):
+        with open(file_name, "w") as f:
+            f.write(",".join(cache.index.tolist()))
             f.write("\n")
         return file_name
     else:
         return pd.DataFrame()
 
-def cache_output(cache, data):
+
+def append_cache(cache, my_cols, docID_1, d1, docID_2, d2, score):
+    data = pd.Series([docID_1, docID_2, score], index=my_cols).append(d1).append(d2)
     if (isinstance(cache, str)):
         with  open(cache, "a") as f:
             f.write(",".join([str(x) for x in data.values()]))
             f.write("\n")
-    else:
-        cache.append(data)
+        return cache
+    elif (isinstance(cache, pd.DataFrame)):
+        return cache.append(data)
 
-def finalize_cached_output(file_name, cache, columns):
+
+def finalize_cached_output(file_name, cache):
     if (isinstance(cache, str)):
         return cache
     else:
-        scored_vars = pd.DataFrame(data = cache, columns = columns)
-        # scored_vars = pd.DataFrame(dict(metadataID_1=[x[0] for x in cache],
-        #                             conceptID=[x[1] for x in cache],
-        #                             study_1=[x[2] for x in cache],
-        #                             dbGaP_studyID_datasetID_1=[x[3] for x in cache],
-        #                             dbGaP_dataset_label_1=[x[4] for x in cache],
-        #                             varID_1=[x[5] for x in cache],
-        #                             var_desc_1=[x[6] for x in cache],
-        #                             timeIntervalDbGaP_1=[x[7] for x in cache],
-        #                             cohort_dbGaP_1=[x[8] for x in cache],
-        #                             metadataID_2=[x[9] for x in cache],
-        #                             study_2=[x[10] for x in cache],
-        #                             dbGaP_studyID_datasetID_2=[x[11] for x in cache],
-        #                             dbGaP_dataset_label_2=[x[12] for x in cache],
-        #                             varID_2=[x[13] for x in cache],
-        #                             var_desc_2=[x[14] for x in cache],
-        #                             timeIntervalDbGaP_2=[x[15] for x in cache],
-        #                             cohort_dbGaP_2=[x[16] for x in cache],
-        #                             score=[x[17] for x in cache],
-        #                             matchID=[x[18] for x in cache])).rename(columns={"score": score_name})
-
-        scored_vars.to_csv(file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
-        return scored_vars
+        cache.to_csv(file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
+        return cache
 
 
-def score_variables(score_name, id_col, data, filter_data, corpus, tfidf_matrix, top_n, file_name):
+def row_func(row, data, corpus, tfidf_matrix, top_n, var_idx, disjoint_col, data_cols, my_cols, cache, matches):
+    if var_idx:
+        matches += 1
+        ref_var_index = var_idx[0]
+        docID_1 = corpus[ref_var_index][0]
+        d1 = row[data_cols]
+
+        # retrieve top_n similar variables
+        [append_cache(cache, my_cols, docID_1, d1, corpus[index][0], data[data_cols].iloc([index]), score)
+         for index, score in similarity_search(tfidf_matrix, ref_var_index, top_n)
+         if score > 0 and data[disjoint_col][index] != row[disjoint_col]]
+
+
+def score_variables(score_name, data, filter_data, corpus, tfidf_matrix, top_n, file_name,
+                    id_col, disjoint_col, data_cols):
     """
     The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
     with a score, for each variable as a pandas data frame.
@@ -165,59 +163,25 @@ def score_variables(score_name, id_col, data, filter_data, corpus, tfidf_matrix,
     :return: pandas data frame of the top_n (as specified by user) results for each variable
     """
 
-    widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
-    pbar = ProgressBar(widgets=widgets, maxval=len(filter_data))
+    my_cols = [id_col[0], id_col[0].replace("_1", "_2"), score_name]
 
-
-    matches = 0
-
-    my_cols = [id_col,
-               id_col.replace("_1", "_2"),
-               score_name,
-               "matchID"]
-    disjoint_col = 'dbGaP_studyID_datasetID_1'
-    data_cols = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
-                 'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
-
-    columns = list(my_cols).extend(data_cols)
-
-    cache = init_cache_output(file_name, columns) # init_cache_output([]) for list cache
+    cache = init_cache(pd.Series([], index=list(my_cols).extend(data_cols)), "file", file_name)
+    # cache = init_cache_output(None, "pandas", file_name)
 
     # matching data in filtered file
-    for num, row in pbar(filter_data.iterrows()):
+
+    # tqdm.pandas(desc="Filtering the data")
+    # filter_data.progress_apply(lambda row: ,axis=1)
+
+
+    widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
+    pbar = ProgressBar(widgets=widgets, maxval=len(filter_data))
+    matches = 0
+    for _, row in pbar(filter_data.iterrows()):
         var = str(row[str(id_col[0])])
         # get index of filter data in corpus
         var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
-
-        if var_idx:
-            matches += 1
-            docID = corpus[var_idx[0]][0]
-
-            d1 =  row[data_cols]
-
-            dbGaP_studyID_datasetID = row[disjoint_col]
-
-            # retrieve top_n similar variables
-            for index, score in similarity_search(tfidf_matrix, var_idx[0], top_n):
-                if score > 0:
-
-                    docID_2 = corpus[index][0]
-
-
-                    d2 = data[data_cols][index]
-
-                    dbGaP_studyID_datasetID_2 = data[disjoint_col][index]
-
-
-                    matchID= str(docID) + "_" + str(docID_2)
-
-
-                    if (dbGaP_studyID_datasetID_2 != dbGaP_studyID_datasetID):
-                        d_all = pd.Series([docID, docID_2,  score, matchID],
-                                          my_cols)
-                        d_all = d_all.append(d1)
-                        d_all = d_all.append(d2)
-                        cache_output(cache, d_all)
+        row_func(row, data, corpus, tfidf_matrix, top_n, var_idx, disjoint_col, data_cols, my_cols, cache, matches)
 
     pbar.finish()
 
@@ -247,9 +211,13 @@ def variable_similarity(data, var_col, dataColsList, filter_data, score_name, fi
     print tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
 
     ## SCORE DATA + WRITE OUT RESULTS
-    scored = score_variables(score_name, var_col, data, filter_data, corpus, tfidf_matrix, len(data) - 1, fileOut)
-    print '\n' + fileOut + " written"#" scored size:" + str(len(scored))  # 4013114
-    return(scored)
+    disjoint_col = 'dbGaP_studyID_datasetID_1'
+    data_cols = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
+                 'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
+    scored = score_variables(score_name, data, filter_data, corpus, tfidf_matrix, len(data) - 1, fileOut,
+                             var_col, disjoint_col, data_cols)
+    print '\n' + fileOut + " written"  # " scored size:" + str(len(scored))  # 4013114
+    return (scored)
 
 
 def merge_score_results(score_matrix1, score_matrix2, how):
