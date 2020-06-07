@@ -26,21 +26,20 @@ nltk.download('stopwords')
 nltk.download("wordnet")
 
 
-class Calculator:
+class VariableSimilarityCalculator:
 
-    def __init__(self, filter_data, data, data_cols, disjoin_col):
+    def __init__(self, filter_data, data, data_cols, pairable):
         """
 
         :param filter_data: a pandas data frame containing variable information used to filter results
         containing the processed question definition
         :param data: pandas data frame containing variable information
         :param data_cols:
-        :param disjoin_col:
         """
-        self.disjoint_col = disjoin_col
         self.data_cols = data_cols
         self.filter_data = filter_data
         self.data = data
+        self.pairable = pairable
 
     def preprocessor(self, id_col, defn_col):
         """
@@ -144,7 +143,7 @@ class Calculator:
             cache.to_csv(file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
             return cache
 
-    def row_func(self, row, corpus, tfidf_matrix, top_n, var_idx, my_cols, cache,
+    def row_func(self, row_idx, row, corpus, tfidf_matrix, top_n, var_idx, my_cols, cache,
                  matches):
         if var_idx:
             matches += 1
@@ -158,7 +157,7 @@ class Calculator:
                                corpus[index][0], self.data[self.data_cols].iloc([index]),
                                score)
              for index, score in self.similarity_search(tfidf_matrix, ref_var_index, top_n)
-             if score > 0 and self.data[self.disjoint_col][index] != row[self.disjoint_col]]
+             if score > 0 and self.pairable(self.data, index, self.filter_data, row_idx)]
 
     def score_variables(self, score_name, corpus, tfidf_matrix, file_name, id_col):
         """
@@ -190,11 +189,11 @@ class Calculator:
         widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
         pbar = ProgressBar(widgets=widgets, maxval=len(self.filter_data))
         matches = 0
-        for _, row in pbar(self.filter_data.iterrows()):
+        for i, row in pbar(self.filter_data.iterrows()):
             var = str(row[str(id_col[0])])
             # get index of filter data in corpus
             var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
-            self.row_func(row, corpus, tfidf_matrix, top_n, var_idx, my_cols, cache, matches)
+            self.row_func(i, row, corpus, tfidf_matrix, top_n, var_idx, my_cols, cache, matches)
 
         pbar.finish()
 
@@ -246,6 +245,18 @@ def merge_score_results(score_matrix1, score_matrix2, how):
     return scored_merged
 
 
+def vals_differ_in_col(col):
+    return lambda s1, s1_idx, s2, s2_idx: s1[col][s1_idx] != s2[col][s2_idx]
+
+
+def vals_differ_in_all_cols(cols):
+    return lambda s1, s1_idx, s2, s2_idx: all([s1[col][s1_idx] != s2[col][s2_idx] for col in cols])
+
+
+def val_in_any_row_for_col(col):
+    return lambda s1, s1_idx, s2, _: s1[col][s1_idx] in s2[col]
+
+
 def main():
     dropbox_dir = "/Users/laurastevens/Dropbox/Graduate School/Data and MetaData Integration/ExtractMetaData/"
     metadataAllVarsFilePath = dropbox_dir + \
@@ -295,7 +306,7 @@ def main():
                  'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
 
     # SCORE DATA + WRITE OUT RESULTS
-    calc = Calculator(filter_data, data, disjoint_col, data_cols)
+    calc = VariableSimilarityCalculator(filter_data, data, data_cols, vals_differ_in_col(disjoint_col))
 
     scored = calc.variable_similarity(var_col, ["var_desc_1"], "score_desc", desc_file_out)
     # len(scored) #4013114
