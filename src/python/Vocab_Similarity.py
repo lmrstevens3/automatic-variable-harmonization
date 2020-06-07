@@ -80,10 +80,10 @@ class CorpusBuilder:
         else:
             return vocab_dict
 
+
 class VariableSimilarityCalculator:
 
-    def __init__(self, filter_data, data, data_cols, pairable, id_col,
-                 cache_type="file", top_n=None, top_n_group=None):
+    def __init__(self, filter_data, data, data_cols, pairable, id_col, top_n=None, top_n_group=None):
         """
 
         :param filter_data: a pandas data frame containing variable information used to filter results
@@ -100,8 +100,9 @@ class VariableSimilarityCalculator:
         self.top_n = top_n or len(data.index) - 1  # len(data) - 1  #
         self.top_n_group = top_n_group
         self.id_col = id_col
-        self.cache_type = cache_type
         self.score_cols = [self.id_col[0], self.id_col[0].replace("_1", "_2")]
+        self.cache = None
+        self.file_name = None
 
     def calculate_top_similarity(self):
         return self.top_n
@@ -132,18 +133,18 @@ class VariableSimilarityCalculator:
 
         return similar_variables
 
-    def init_cache(self, file_name, score_name):
-        self.score_cols = self.score_cols.append(score_name)
+    def init_cache(self, score_name, file_name=None):
         self.file_name = file_name
+        self.score_cols = self.score_cols.append(score_name)
         self.cache = pd.DataFrame([], index=list(self.score_cols).extend(self.data_cols))
-        if self.cache_type == "file":
-            with open(file_name, "w") as f:
+        if self.file_name:
+            with open(self.file_name, "w") as f:
                 f.write(",".join(self.cache.index.tolist()))
                 f.write("\n")
 
     def append_cache(self, doc_id_1, d1, doc_id_2, d2, score):
         data = pd.Series([doc_id_1, doc_id_2, score], index=self.score_cols).append(d1).append(d2)
-        if self.cache_type == "string":
+        if self.file_name:
             with open(self.file_name, "a") as f:
                 f.write(",".join([str(x) for x in data.values()]))
                 f.write("\n")
@@ -151,7 +152,7 @@ class VariableSimilarityCalculator:
             self.cache.append(data)
 
     def finalize_cached_output(self):
-        if self.cache_type == "string":
+        if self.file_name:
             pass
         else:
             self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
@@ -294,12 +295,6 @@ def main():
 
     save_dir = "tiff_laura_shared/NLP text Score results/"
     file_name_format = save_dir + "FHS_CHS_MESA_ARIC_text_similarity_scores_%s_ManuallyMappedConceptVars_7.17.19.csv"
-    desc_file_out = file_name_format % "descOnly"
-    coding_file_out = file_name_format % "codingOnly"
-    units_file_out = file_name_format % "unitsOnly_ManuallyMappedConceptVars_7.17.19.csv"
-    desc_units_file_out = file_name_format % "descUnits_ManuallyMappedConceptVars_7.17.19.csv"
-    desc_coding_file_out = file_name_format % "descCoding_ManuallyMappedConceptVars_7.17.19.csv"
-    all_file_out = file_name_format % "descCodingUnits_ManuallyMappedConceptVars_7.17.19.csv"
 
     disjoint_col = 'dbGaP_studyID_datasetID_1'
     data_cols = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
@@ -309,38 +304,44 @@ def main():
     calc = VariableSimilarityCalculator(filter_data, data, data_cols, vals_differ_in_col(disjoint_col), id_col)
 
     score_name = "score_desc"
+    file_name = file_name_format % "descOnly"
     corpus_builder = CorpusBuilder(["var_desc_1"])
-    calc.init_cache(desc_file_out, score_name)
+    calc.init_cache(score_name, file_name)
     scored = calc.variable_similarity(score_name, corpus_builder)
     # len(scored) #4013114
 
     score_name = "score_codeLab"
+    file_name = file_name_format % "codingOnly"
     corpus_builder = CorpusBuilder(["var_coding_labels_1"])
-    calc.init_cache(coding_file_out, score_name)
+    calc.init_cache(score_name, file_name)
     scored_coding = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_coding)
 
     score_name = "score_units"
+    file_name = file_name_format % "unitsOnly_ManuallyMappedConceptVars_7.17.19.csv"
     corpus_builder = CorpusBuilder(["units_1"])
-    calc.init_cache(units_file_out, score_name)
+    calc.init_cache(score_name, file_name)
     scored_units = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_units)
 
     score_name = "score_descUnits"
+    file_name = file_name_format % "descUnits_ManuallyMappedConceptVars_7.17.19.csv"
     corpus_builder = CorpusBuilder(["var_desc_1", "units_1"])
-    calc.init_cache(desc_units_file_out, score_name)
+    calc.init_cache(score_name, file_name)
     scored_desc_units = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_desc_coding)  # 4013114
 
     score_name = "score_descCoding"
+    file_name = file_name_format % "descCoding_ManuallyMappedConceptVars_7.17.19.csv"
     corpus_builder = CorpusBuilder(["var_desc_1", "var_coding_labels_1"])
-    calc.init_cache(desc_coding_file_out, score_name)
+    calc.init_cache(score_name, file_name)
     scored_desc_coding = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_desc_coding)  # 4013114
 
     score_name = "score_descCodingUnits"
+    file_name = file_name_format % "descCodingUnits_ManuallyMappedConceptVars_7.17.19.csv"
     corpus_builder = CorpusBuilder(["var_desc_1", "units_1", "var_coding_labels_1"])
-    calc.init_cache(all_file_out, score_name)
+    calc.init_cache(score_name, file_name)
     scored_desc_coding_units = calc.variable_similarity(score_name, corpus_builder)
     # len(scored_full) #scored_desc_lab
 
