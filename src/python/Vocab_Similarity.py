@@ -26,198 +26,198 @@ from nltk.stem import WordNetLemmatizer
 from progressbar import ProgressBar, FormatLabel, Percentage, Bar
 
 
-def preprocessor(data, id_col, defn_col):
-    """
-    Using the data and defn_col lists, the function assembles an identifier and text string for each row in data.
-    The text string is then preprocessed by making all words lowercase, removing all punctuation, tokenizing by word,
-    removing english stop words, and lemmatized (via wordnet). The function returns a list of lists,
-    where the first item in each list is the identifier and the second item is a list containing the processed text.
+class Calculator:
 
-    :param data: pandas data frame containing variable information
-    :param id_col: list of columns used to assemble question identifier
-    :param defn_col: list of columns used to assemble variable definition/documentation
-    :return: a list of lists, where the first item in each list is the identifier and the second item is a list
-    containing the processed question definition
-    """
+    def __init__(self, filter_data):
+        self.filter_data = filter_data
 
-    widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
-    pbar = ProgressBar(widgets=widgets, maxval=len(data))
+    def preprocessor(self, data, id_col, defn_col):
+        """
+        Using the data and defn_col lists, the function assembles an identifier and text string for each row in data.
+        The text string is then preprocessed by making all words lowercase, removing all punctuation, tokenizing by word,
+        removing english stop words, and lemmatized (via wordnet). The function returns a list of lists,
+        where the first item in each list is the identifier and the second item is a list containing the processed text.
 
-    vocab_dict = []
+        :param data: pandas data frame containing variable information
+        :param id_col: list of columns used to assemble question identifier
+        :param defn_col: list of columns used to assemble variable definition/documentation
+        :return: a list of lists, where the first item in each list is the identifier and the second item is a list
+        containing the processed question definition
+        """
 
-    for index, row in pbar(data.iterrows()):
-        var = str(row[str(id_col[0])])
+        widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
+        pbar = ProgressBar(widgets=widgets, maxval=len(data))
 
-        # if defn_col is multiple columns,  concatenate text from all columns
-        if len(defn_col) == 1:
-            defn = str(row[str(defn_col[0])])
+        vocab_dict = []
+
+        for index, row in pbar(data.iterrows()):
+            var = str(row[str(id_col[0])])
+
+            # if defn_col is multiple columns,  concatenate text from all columns
+            if len(defn_col) == 1:
+                defn = str(row[str(defn_col[0])])
+            else:
+                defn_cols = [str(i) for i in row[defn_col]]  # type: List[str]
+                defn = str(" ".join(defn_cols))
+
+            # lowercase
+            defn_lower = defn.lower()
+
+            # tokenize & remove punctuation
+            tok_punc_defn = RegexpTokenizer(r"\w+").tokenize(defn_lower)
+
+            # remove stop words & lemmatize
+            defn_lemma = []
+            for x in tok_punc_defn:
+                if (all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english")):
+                    defn_lemma.append(str(WordNetLemmatizer().lemmatize(x)))
+
+            vocab_dict.append((var, defn_lemma))
+
+        pbar.finish()
+
+        # verify all rows were processed before returning data
+        if len(vocab_dict) != len(data):
+            matched = round(len(vocab_dict) / float(len(data)) * 100, 2)
+            raise ValueError('There is a problem - Only matched {0}% of variables were processed'.format(matched))
         else:
-            defn_cols = [str(i) for i in row[defn_col]]  # type: List[str]
-            defn = str(" ".join(defn_cols))
+            return vocab_dict
 
-        # lowercase
-        defn_lower = defn.lower()
+    def similarity_search(self, tfidf_matrix, ref_var_index, top_n):
+        """
+        The function calculates the cosine similarity between the index variables and all other included variables in the
+        matrix. The results are sorted and returned as a list of lists, where each list contains a variable identifier
+        and the cosine similarity score for the top set of similar variables as indicated by the input argument are
+        returned.
 
-        # tokenize & remove punctuation
-        tok_punc_defn = RegexpTokenizer(r"\w+").tokenize(defn_lower)
+        :param tfidf_matrix: where each row represents a variables and each column represents a word and counts are
+        weighted by TF-IDF- matrix is n variable (row) X N all unique words in all documentation (cols)
+        :param ref_var_index: an integer representing a variable id
+        :param top_n: an integer representing the number of similar variables to return
+        :return: a list of lists where each list contains a variable identifier and the cosine similarity
+            score the top set of similar as indicated by the input argument are returned
+        """
 
-        # remove stop words & lemmatize
-        defn_lemma = []
-        for x in tok_punc_defn:
-            if (all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english")):
-                defn_lemma.append(str(WordNetLemmatizer().lemmatize(x)))
+        # calculate similarity
+        cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix).flatten()
+        rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
+        similar_variables = itertools.islice(
+            ((variable, cosine_similarities[variable]) for variable in rel_var_indices),
+            top_n)
 
-        vocab_dict.append((var, defn_lemma))
+        return similar_variables
 
-    pbar.finish()
+    def init_cache(self, cache, cache_type, file_name):
+        if (cache_type == "file"):
+            with open(file_name, "w") as f:
+                f.write(",".join(cache.index.tolist()))
+                f.write("\n")
+            return file_name
+        else:
+            return pd.DataFrame()
 
-    # verify all rows were processed before returning data
-    if len(vocab_dict) != len(data):
-        matched = round(len(vocab_dict) / float(len(data)) * 100, 2)
-        raise ValueError('There is a problem - Only matched {0}% of variables were processed'.format(matched))
-    else:
-        return vocab_dict
+    def append_cache(self, cache, my_cols, docID_1, d1, docID_2, d2, score):
+        data = pd.Series([docID_1, docID_2, score], index=my_cols).append(d1).append(d2)
+        if (isinstance(cache, str)):
+            with  open(cache, "a") as f:
+                f.write(",".join([str(x) for x in data.values()]))
+                f.write("\n")
+            return cache
+        elif (isinstance(cache, pd.DataFrame)):
+            return cache.append(data)
 
+    def finalize_cached_output(file_name, cache):
+        if (isinstance(cache, str)):
+            return cache
+        else:
+            cache.to_csv(file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
+            return cache
 
-def similarity_search(tfidf_matrix, ref_var_index, top_n):
-    """
-    The function calculates the cosine similarity between the index variables and all other included variables in the
-    matrix. The results are sorted and returned as a list of lists, where each list contains a variable identifier
-    and the cosine similarity score for the top set of similar variables as indicated by the input argument are
-    returned.
+    def row_func(self, row, data, corpus, tfidf_matrix, top_n, var_idx, disjoint_col, data_cols, my_cols, cache,
+                 matches):
+        if var_idx:
+            matches += 1
+            ref_var_index = var_idx[0]
+            docID_1 = corpus[ref_var_index][0]
+            d1 = row[data_cols]
 
-    :param tfidf_matrix: where each row represents a variables and each column represents a word and counts are
-    weighted by TF-IDF- matrix is n variable (row) X N all unique words in all documentation (cols)
-    :param ref_var_index: an integer representing a variable id
-    :param top_n: an integer representing the number of similar variables to return
-    :return: a list of lists where each list contains a variable identifier and the cosine similarity
-        score the top set of similar as indicated by the input argument are returned
-    """
+            # retrieve top_n similar variables
+            [self.append_cache(cache, my_cols, docID_1, d1, corpus[index][0], data[data_cols].iloc([index]), score)
+             for index, score in self.similarity_search(tfidf_matrix, ref_var_index, top_n)
+             if score > 0 and data[disjoint_col][index] != row[disjoint_col]]
 
-    # calculate similarity
-    cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix).flatten()
-    rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
-    similar_variables = itertools.islice(((variable, cosine_similarities[variable]) for variable in rel_var_indices),
-                                         top_n)
+    def score_variables(self, score_name, data, corpus, tfidf_matrix, top_n, file_name,
+                        id_col, disjoint_col, data_cols):
+        """
+        The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
+        with a score, for each variable as a pandas data frame.
 
-    return similar_variables
+        :param id_col: list of columns used to assemble question identifier
+        :param data: pandas data frame containing variable information
+        :param corpus: a list of lists, where the first item in each list is the identifier and the second item is a list
+        containing the processed question definition
+        :param filter_data: a pandas data frame containing variable information used to filter results
+        containing the processed question definition
+        :param tfidf_matrix: matrix where each row represents a variables and each column represents a concept and counts
+        are weighted by TF-IDF
+        :param top_n: number of results to return for each variable
+        :return: pandas data frame of the top_n (as specified by user) results for each variable
+        """
 
+        my_cols = [id_col[0], id_col[0].replace("_1", "_2"), score_name]
 
-def init_cache(cache, cache_type, file_name):
-    if (cache_type == "file"):
-        with open(file_name, "w") as f:
-            f.write(",".join(cache.index.tolist()))
-            f.write("\n")
-        return file_name
-    else:
-        return pd.DataFrame()
+        cache = self.init_cache(pd.Series([], index=list(my_cols).extend(data_cols)), "file", file_name)
+        # cache = init_cache_output(None, "pandas", file_name)
 
+        # matching data in filtered file
 
-def append_cache(cache, my_cols, docID_1, d1, docID_2, d2, score):
-    data = pd.Series([docID_1, docID_2, score], index=my_cols).append(d1).append(d2)
-    if (isinstance(cache, str)):
-        with  open(cache, "a") as f:
-            f.write(",".join([str(x) for x in data.values()]))
-            f.write("\n")
+        # tqdm.pandas(desc="Filtering the data")
+        # filter_data.progress_apply(lambda row: ,axis=1)
+
+        widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
+        pbar = ProgressBar(widgets=widgets, maxval=len(self.filter_data))
+        matches = 0
+        for _, row in pbar(self.filter_data.iterrows()):
+            var = str(row[str(id_col[0])])
+            # get index of filter data in corpus
+            var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
+            self.row_func(row, data, corpus, tfidf_matrix, top_n, var_idx, disjoint_col, data_cols, my_cols, cache,
+                          matches)
+
+        pbar.finish()
+
+        # verify that we got all the matches we expected (assumes that we should be able to match all vars in filtered data)
+
+        if matches != len(self.filter_data):
+            matched = round(matches / float(len(self.filter_data)) * 100, 2)
+            raise ValueError('There is a problem - Only matched {0}% of filtered variables'.format(matched))
+
+        self.finalize_cached_output(file_name, cache)
+
+        print("Filtering matched " + str(matches) + " of " + str(len(self.filter_data)) + " variables")
         return cache
-    elif (isinstance(cache, pd.DataFrame)):
-        return cache.append(data)
 
+    def variable_similarity(self, data, var_col, dataColsList, score_name, fileOut):
+        ## PRE-PROCESS DATA & BUILD CORPORA
+        # var_col and defn/units/codeLabels_col hold information from the data frame and are used when processing the data
+        corpus = self.preprocessor(data, var_col, dataColsList)
 
-def finalize_cached_output(file_name, cache):
-    if (isinstance(cache, str)):
-        return cache
-    else:
-        cache.to_csv(file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
-        return cache
+        ## BUILD TF-IDF VECTORIZER
+        tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2", lowercase=False)
 
+        ## CREATE MATRIX AND VECTORIZE DATA
+        tfidf_matrix = tf.fit_transform([content for var, content in corpus])
+        print '\n' + score_name + " tfidf_matrix size:"
+        print tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
 
-def row_func(row, data, corpus, tfidf_matrix, top_n, var_idx, disjoint_col, data_cols, my_cols, cache, matches):
-    if var_idx:
-        matches += 1
-        ref_var_index = var_idx[0]
-        docID_1 = corpus[ref_var_index][0]
-        d1 = row[data_cols]
-
-        # retrieve top_n similar variables
-        [append_cache(cache, my_cols, docID_1, d1, corpus[index][0], data[data_cols].iloc([index]), score)
-         for index, score in similarity_search(tfidf_matrix, ref_var_index, top_n)
-         if score > 0 and data[disjoint_col][index] != row[disjoint_col]]
-
-
-def score_variables(score_name, data, filter_data, corpus, tfidf_matrix, top_n, file_name,
-                    id_col, disjoint_col, data_cols):
-    """
-    The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
-    with a score, for each variable as a pandas data frame.
-
-    :param id_col: list of columns used to assemble question identifier
-    :param data: pandas data frame containing variable information
-    :param corpus: a list of lists, where the first item in each list is the identifier and the second item is a list
-    containing the processed question definition
-    :param filter_data: a pandas data frame containing variable information used to filter results
-    containing the processed question definition
-    :param tfidf_matrix: matrix where each row represents a variables and each column represents a concept and counts
-    are weighted by TF-IDF
-    :param top_n: number of results to return for each variable
-    :return: pandas data frame of the top_n (as specified by user) results for each variable
-    """
-
-    my_cols = [id_col[0], id_col[0].replace("_1", "_2"), score_name]
-
-    cache = init_cache(pd.Series([], index=list(my_cols).extend(data_cols)), "file", file_name)
-    # cache = init_cache_output(None, "pandas", file_name)
-
-    # matching data in filtered file
-
-    # tqdm.pandas(desc="Filtering the data")
-    # filter_data.progress_apply(lambda row: ,axis=1)
-
-
-    widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
-    pbar = ProgressBar(widgets=widgets, maxval=len(filter_data))
-    matches = 0
-    for _, row in pbar(filter_data.iterrows()):
-        var = str(row[str(id_col[0])])
-        # get index of filter data in corpus
-        var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
-        row_func(row, data, corpus, tfidf_matrix, top_n, var_idx, disjoint_col, data_cols, my_cols, cache, matches)
-
-    pbar.finish()
-
-    # verify that we got all the matches we expected (assumes that we should be able to match all vars in filtered data)
-
-    if matches != len(filter_data):
-        matched = round(matches / float(len(filter_data)) * 100, 2)
-        raise ValueError('There is a problem - Only matched {0}% of filtered variables'.format(matched))
-
-    finalize_cached_output(file_name, cache)
-
-    print("Filtering matched " + str(matches) + " of " + str(len(filter_data)) + " variables")
-    return cache
-
-
-def variable_similarity(data, var_col, dataColsList, filter_data, score_name, fileOut):
-    ## PRE-PROCESS DATA & BUILD CORPORA
-    # var_col and defn/units/codeLabels_col hold information from the data frame and are used when processing the data
-    corpus = preprocessor(data, var_col, dataColsList)
-
-    ## BUILD TF-IDF VECTORIZER
-    tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2", lowercase=False)
-
-    ## CREATE MATRIX AND VECTORIZE DATA
-    tfidf_matrix = tf.fit_transform([content for var, content in corpus])
-    print '\n' + score_name + " tfidf_matrix size:"
-    print tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
-
-    ## SCORE DATA + WRITE OUT RESULTS
-    disjoint_col = 'dbGaP_studyID_datasetID_1'
-    data_cols = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
-                 'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
-    scored = score_variables(score_name, data, filter_data, corpus, tfidf_matrix, len(data) - 1, fileOut,
-                             var_col, disjoint_col, data_cols)
-    print '\n' + fileOut + " written"  # " scored size:" + str(len(scored))  # 4013114
-    return (scored)
+        ## SCORE DATA + WRITE OUT RESULTS
+        disjoint_col = 'dbGaP_studyID_datasetID_1'
+        data_cols = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
+                     'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
+        scored = self.score_variables(score_name, data, corpus, tfidf_matrix, len(data) - 1, fileOut,
+                                      var_col, disjoint_col, data_cols)
+        print '\n' + fileOut + " written"  # " scored size:" + str(len(scored))  # 4013114
+        return (scored)
 
 
 def merge_score_results(score_matrix1, score_matrix2, how):
@@ -276,26 +276,27 @@ def main():
     allFileOut = "tiff_laura_shared/NLP text Score results/FHS_CHS_MESA_ARIC_text_similarity_scores_descCodingUnits_ManuallyMappedConceptVars_7.17.19.csv"
 
     ## SCORE DATA + WRITE OUT RESULTS
-    scored = variable_similarity(data, var_col, ["var_desc_1"], filter_data, sep, "score_desc", descFileOut)
+    calc = Calculator(filter_data)
+    scored = calc.variable_similarity(data, var_col, ["var_desc_1"], sep, "score_desc", descFileOut)
     # len(scored) #4013114
 
-    scored_coding = variable_similarity(data, var_col, ["var_coding_labels_1"], filter_data, sep, "score_codeLab",
-                                        codingFileOut)
+    scored_coding = calc.variable_similarity(data, var_col, ["var_coding_labels_1"], sep, "score_codeLab",
+                                             codingFileOut)
     # len(scored_coding)
 
-    scored_units = variable_similarity(data, var_col, ["units_1"], filter_data, sep, "score_units", unitsFileOut)
+    scored_units = calc.variable_similarity(data, var_col, ["units_1"], sep, "score_units", unitsFileOut)
     # len(scored_units)
 
-    scored_desc_units = variable_similarity(data, var_col, ["var_desc_1", "units_1"], filter_data, sep,
-                                            "score_descUnits", desc_unitsFileOut)
+    scored_desc_units = calc.variable_similarity(data, var_col, ["var_desc_1", "units_1"], sep,
+                                                 "score_descUnits", desc_unitsFileOut)
     # len(scored_desc_coding)  # 4013114
 
-    scored_desc_coding = variable_similarity(data, var_col, ["var_desc_1", "var_coding_labels_1"], filter_data, sep,
-                                             "score_descCoding", desc_codingFileOut)
+    scored_desc_coding = calc.variable_similarity(data, var_col, ["var_desc_1", "var_coding_labels_1"], sep,
+                                                  "score_descCoding", desc_codingFileOut)
     # len(scored_desc_coding)  # 4013114
 
-    scored_desc_coding_units = variable_similarity(data, var_col, ["var_desc_1", "units_1", "var_coding_labels_1"],
-                                                   filter_data, sep, "score_descCodingUnits", allFileOut)
+    scored_desc_coding_units = calc.variable_similarity(data, var_col, ["var_desc_1", "units_1", "var_coding_labels_1"],
+                                                        sep, "score_descCodingUnits", allFileOut)
     # len(scored_full) #scored_desc_lab
 
     # Merge scores files and write to merged file- CURRENTLY "SCORED" data frame is not returned from score_variables-so merged code below will not work with this code.
