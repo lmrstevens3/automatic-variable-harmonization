@@ -90,24 +90,32 @@ class CorpusBuilder:
 
 class VariableSimilarityCalculator:
 
-    def __init__(self, filter_data, data, data_cols, pairable, id_col, top_n=None, top_n_group=None):
+    def __init__(self, data, id_col, filter_data=None, pairable=None, data_cols_to_keep=None, filter_data_cols_to_keep=None, top_n=None,
+                 top_n_group=None):
         """
 
+        :param filter_data_cols_to_keep:
         :param filter_data: a pandas data frame containing variable information used to filter results
         containing the processed question definition
         :param data: pandas data frame containing variable information
-        :param data_cols:
+        :param data_cols_to_keep:
         :param top_n: number of results to return for each variable
         :param id_col: list of columns used to assemble question identifier
         """
-        self.data_cols = data_cols
-        self.filter_data = filter_data
+        data_col_suffix = "_paired"
+        filter_data_col_suffix = "_ref"
+        self.filter_data_cols_to_keep = filter_data_cols_to_keep
+        self.data_cols_to_keep = data_cols_to_keep
+
+        self.ref_cols = [col + filter_data_col_suffix for col in filter_data_cols_to_keep]
+        self.paired_cols = [col + data_col_suffix for col in data_cols_to_keep]
+        self.filter_data = filter_data or data
         self.data = data
-        self.pairable = pairable
+        self.pairable = pairable or vals_differ_in_col(id_col)
         self.top_n = top_n or len(data.index) - 1  # len(data) - 1  #
         self.top_n_group = top_n_group
         self.id_col = id_col
-        self.score_cols = [self.id_col, self.id_col.replace("_1", "_2")]
+        self.score_cols = [self.id_col + filter_data_col_suffix, self.id_col.replace(filter_data_col_suffix, "")] + data_col_suffix
         self.cache = None
         self.file_name = None
 
@@ -142,7 +150,9 @@ class VariableSimilarityCalculator:
     def init_cache(self, score_name, file_name=None):
         self.file_name = file_name
         self.score_cols = self.score_cols.append(score_name)
-        self.cache = pd.DataFrame([], index=list(self.score_cols).extend(self.data_cols))
+        self.cache = pd.DataFrame([], index=list(self.score_cols).extend(self.data_cols_to_keep))
+        self.cache.rename(self.data_cols_to_keep, self.paired_cols)
+        self.cache.rename(self.filter_data_cols_to_keep, self.ref_cols)
         if self.file_name:
             with open(self.file_name, "w") as f:
                 f.write(",".join(self.cache.index.tolist()))
@@ -150,6 +160,7 @@ class VariableSimilarityCalculator:
 
     def append_cache(self, doc_id_1, d1, doc_id_2, d2, score):
         data = pd.Series([doc_id_1, doc_id_2, score], index=self.score_cols).append(d1).append(d2)
+
         if self.file_name:
             with open(self.file_name, "a") as f:
                 f.write(",".join([str(x) for x in data.values()]))
@@ -158,9 +169,7 @@ class VariableSimilarityCalculator:
             self.cache.append(data)
 
     def finalize_cached_output(self):
-        if self.file_name:
-            pass
-        else:
+        if not self.file_name:
             self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
         print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
@@ -169,11 +178,12 @@ class VariableSimilarityCalculator:
             matches += 1
             ref_var_index = var_idx[0]
             doc_id_1 = corpus_builder.corpus[ref_var_index][0]
-            d1 = row[self.data_cols]
+            d1 = row[self.filter_data_cols_to_keep]
+            d1.rename(self.filter_data_cols_to_keep, self.ref_cols)
 
             # retrieve top_n similar variables
             [self.append_cache(doc_id_1, d1,
-                               corpus_builder.corpus[index][0], self.data[self.data_cols].iloc([index]),
+                               corpus_builder.corpus[index][0], self.data[self.data_cols_to_keep].iloc([index]).rename(self.data_cols_to_keep, self.paired_cols),
                                score)
              for index, score in self.similarity_search(corpus_builder, ref_var_index)
              if score > 0 and self.pairable(self.data, index, self.filter_data, row_idx)]
@@ -297,11 +307,17 @@ def main():
     file_name_format = save_dir + "FHS_CHS_MESA_ARIC_text_similarity_scores_%s_ManuallyMappedConceptVars_7.17.19.csv"
 
     disjoint_col = 'dbGaP_studyID_datasetID_1'
-    data_cols = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
+    data_cols_to_keep = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
                  'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
 
+    filter_data_cols_to_keep = data_cols_to_keep
+
     # SCORE DATA + WRITE OUT RESULTS
-    calc = VariableSimilarityCalculator(filter_data, data, data_cols, vals_differ_in_col(disjoint_col), id_col)
+    calc = VariableSimilarityCalculator(data, id_col,
+                                        filter_data=filter_data,
+                                        pairable=vals_differ_in_col(disjoint_col),
+                                        data_cols_to_keep=data_cols_to_keep,
+                                        filter_data_cols_to_keep = filter_data_cols_to_keep)
 
     score_name = "score_desc"
     file_name = file_name_format % "descOnly"
