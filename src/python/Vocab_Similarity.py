@@ -28,7 +28,8 @@ nltk.download("wordnet")
 
 class VariableSimilarityCalculator:
 
-    def __init__(self, filter_data, data, data_cols, pairable, top_n=None, top_n_group=None):
+    def __init__(self, filter_data, data, data_cols, pairable, id_col,
+                 cache_type="file", top_n=None, top_n_group=None):
         """
 
         :param filter_data: a pandas data frame containing variable information used to filter results
@@ -36,13 +37,16 @@ class VariableSimilarityCalculator:
         :param data: pandas data frame containing variable information
         :param data_cols:
         :param top_n: number of results to return for each variable
+        :param id_col: list of columns used to assemble question identifier
         """
         self.data_cols = data_cols
         self.filter_data = filter_data
         self.data = data
         self.pairable = pairable
-        self.top_n = top_n or len(data.index) -  1  # len(data) - 1  #
+        self.top_n = top_n or len(data.index) - 1  # len(data) - 1  #
         self.top_n_group = top_n_group
+        self.id_col = id_col
+        self.cache_type = cache_type
 
     def preprocessor(self, id_col, defn_col):
         """
@@ -97,8 +101,7 @@ class VariableSimilarityCalculator:
             return vocab_dict
 
     def calculate_top_similarity(self):
-
-        return None
+        return self.top_n
 
     def similarity_search(self, tfidf_matrix, ref_var_index):
         """
@@ -116,41 +119,42 @@ class VariableSimilarityCalculator:
 
         # calculate similarity
         cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix).flatten()
-        rel_var_indices = [i for i in cosine_similarities.argsort() if i != ref_var_index]
+        rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
         similar_variables = itertools.islice(
             ((i, cosine_similarities[i]) for i in rel_var_indices),
-            len(rel_var_indices) - self.top_n, len(rel_var_indices))
+            self.top_n)
 
-        return reversed(similar_variables)
+        if self.top_n_group:
+            pass
 
-    def init_cache(self, cache, cache_type, file_name):
-        if cache_type == "file":
+        return similar_variables
+
+    def init_cache(self, file_name, score_name):
+        self.score_cols = [self.id_col[0], self.id_col[0].replace("_1", "_2"), score_name]
+        self.file_name = file_name
+        self.cache = pd.DataFrame([], index=list(self.score_cols).extend(self.data_cols))
+        if self.cache_type == "file":
             with open(file_name, "w") as f:
-                f.write(",".join(cache.index.tolist()))
+                f.write(",".join(self.cache.index.tolist()))
                 f.write("\n")
-            return file_name
-        else:
-            return pd.DataFrame()
 
-    def append_cache(self, cache, my_cols, doc_id_1, d1, doc_id_2, d2, score):
-        data = pd.Series([doc_id_1, doc_id_2, score], index=my_cols).append(d1).append(d2)
-        if isinstance(cache, str):
-            with open(cache, "a") as f:
+    def append_cache(self, doc_id_1, d1, doc_id_2, d2, score):
+        data = pd.Series([doc_id_1, doc_id_2, score], index=self.score_cols).append(d1).append(d2)
+        if self.cache_type == "string":
+            with open(self.file_name, "a") as f:
                 f.write(",".join([str(x) for x in data.values()]))
                 f.write("\n")
-            return cache
-        elif isinstance(cache, pd.DataFrame):
-            return cache.append(data)
+        elif isinstance(self.cache, pd.DataFrame):
+            self.cache.append(data)
 
-    def finalize_cached_output(self, file_name, cache):
-        if isinstance(cache, str):
-            return cache
+    def finalize_cached_output(self):
+        if self.cache_type == "string":
+            pass
         else:
-            cache.to_csv(file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
-            return cache
+            self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
+        print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
-    def row_func(self, row_idx, row, corpus, tfidf_matrix, var_idx, my_cols, cache,
-                 matches):
+    def row_func(self, row_idx, row, corpus, tfidf_matrix, var_idx, matches):
         if var_idx:
             matches += 1
             ref_var_index = var_idx[0]
@@ -158,21 +162,17 @@ class VariableSimilarityCalculator:
             d1 = row[self.data_cols]
 
             # retrieve top_n similar variables
-            [self.append_cache(cache, my_cols,
-                               doc_id_1, d1,
+            [self.append_cache(doc_id_1, d1,
                                corpus[index][0], self.data[self.data_cols].iloc([index]),
                                score)
              for index, score in self.similarity_search(tfidf_matrix, ref_var_index)
              if score > 0 and self.pairable(self.data, index, self.filter_data, row_idx)]
 
-    def score_variables(self, score_name, corpus, tfidf_matrix, file_name, id_col):
+    def score_variables(self, corpus, tfidf_matrix):
         """
         The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
         with a score, for each variable as a pandas data frame.
 
-        :param file_name:
-        :param score_name:
-        :param id_col: list of columns used to assemble question identifier
         :param corpus: a list of lists, where the first item in each list is the identifier and the second item is a l
         ist containing the processed question definition
         :param tfidf_matrix: matrix where each row represents a variables and each column represents a concept and
@@ -180,9 +180,6 @@ class VariableSimilarityCalculator:
         :return: pandas data frame of the top_n (as specified by user) results for each variable
         """
 
-        my_cols = [id_col[0], id_col[0].replace("_1", "_2"), score_name]
-
-        cache = self.init_cache(pd.Series([], index=list(my_cols).extend(self.data_cols)), "file", file_name)
         # cache = init_cache_output(None, "pandas", file_name)
 
         # matching data in filtered file
@@ -194,10 +191,10 @@ class VariableSimilarityCalculator:
         pbar = ProgressBar(widgets=widgets, maxval=len(self.filter_data))
         matches = 0
         for i, row in pbar(self.filter_data.iterrows()):
-            var = str(row[str(id_col[0])])
+            var = str(row[str(self.id_col[0])])
             # get index of filter data in corpus
             var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
-            self.row_func(i, row, corpus, tfidf_matrix, var_idx, my_cols, cache, matches)
+            self.row_func(i, row, corpus, tfidf_matrix, var_idx, matches)
 
         pbar.finish()
 
@@ -208,16 +205,15 @@ class VariableSimilarityCalculator:
             matched = round(matches / float(len(self.filter_data)) * 100, 2)
             raise ValueError('There is a problem - Only matched {0}% of filtered variables'.format(matched))
 
-        self.finalize_cached_output(file_name, cache)
+        self.finalize_cached_output()
 
         print("Filtering matched " + str(matches) + " of " + str(len(self.filter_data)) + " variables")
-        return cache
 
-    def variable_similarity(self, var_col, data_cols_list, score_name, file_name):
+    def variable_similarity(self, id_col, data_cols_list, score_name):
         # PRE-PROCESS DATA & BUILD CORPORA
         # var_col and defn/units/codeLabels_col hold information from the data frame and are used when
         # processing the data
-        corpus = self.preprocessor(var_col, data_cols_list)
+        corpus = self.preprocessor(id_col, data_cols_list)
 
         # BUILD TF-IDF VECTORIZER
         tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2", lowercase=False)
@@ -228,8 +224,7 @@ class VariableSimilarityCalculator:
         print tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
 
         # SCORE DATA + WRITE OUT RESULTS
-        scored = self.score_variables(score_name, corpus, tfidf_matrix, file_name, var_col)
-        print '\n' + file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
+        scored = self.score_variables(corpus, tfidf_matrix)
         return scored
 
 
@@ -263,13 +258,11 @@ def val_in_any_row_for_col(col):
 
 def main():
     dropbox_dir = "/Users/laurastevens/Dropbox/Graduate School/Data and MetaData Integration/ExtractMetaData/"
-    metadataAllVarsFilePath = dropbox_dir + \
-                              "tiff_laura_shared/" \
-                              "FHS_CHS_ARIC_MESA_dbGaP_var_report_dict_xml_Info_contVarNA_NLP_timeInterval_noDate_noFU_5-9-19.csv"
+    metadata_all_vars_file_path = dropbox_dir + "tiff_laura_shared/FHS_CHS_ARIC_MESA_dbGaP_var_report_dict_xml_Info_contVarNA_NLP_timeInterval_noDate_noFU_5-9-19.csv"
     concept_mapped_vars_file_path = dropbox_dir + "CorrectConceptVariablesMapped_contVarNA_NLP.csv"
 
     # READ IN DATA -- 07.17.19
-    data = pd.read_csv(metadataAllVarsFilePath, sep=",", quotechar='"', na_values="",
+    data = pd.read_csv(metadata_all_vars_file_path, sep=",", quotechar='"', na_values="",
                        low_memory=False)  # when reading in data, check to see if there is "\r" if
     # not then don't use "lineterminator='\n'", otherwise u
     data.units_1 = data.units_1.fillna("")
@@ -292,7 +285,7 @@ def main():
     # filter_data_m.to_csv("CorrectConceptVariablesMapped_RandomID_12.02.18.csv", sep=",", encoding="utf-8",
     #                      index = False)
 
-    var_col = ["varDocID_1"]
+    id_col = ["varDocID_1"]
 
     "FHS_CHS_MESA_ARIC_text_similarity_scores"
 
@@ -310,27 +303,38 @@ def main():
                  'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
 
     # SCORE DATA + WRITE OUT RESULTS
-    calc = VariableSimilarityCalculator(filter_data, data, data_cols, vals_differ_in_col(disjoint_col))
+    calc = VariableSimilarityCalculator(filter_data, data, data_cols, vals_differ_in_col(disjoint_col), id_col)
 
-    scored = calc.variable_similarity(var_col, ["var_desc_1"], "score_desc", desc_file_out)
+    score_name = "score_desc"
+    calc.init_cache(desc_file_out, score_name)
+    scored = calc.variable_similarity(id_col, ["var_desc_1"], score_name)
     # len(scored) #4013114
 
-    scored_coding = calc.variable_similarity(var_col, ["var_coding_labels_1"], "score_codeLab", coding_file_out)
+    score_name = "score_codeLab"
+    calc.init_cache(coding_file_out, score_name)
+    scored_coding = calc.variable_similarity(id_col, ["var_coding_labels_1"], score_name)
     # len(scored_coding)
 
-    scored_units = calc.variable_similarity(var_col, ["units_1"], "score_units", units_file_out)
+    score_name = "score_units"
+    calc.init_cache(units_file_out, score_name)
+    scored_units = calc.variable_similarity(id_col, ["units_1"], score_name)
     # len(scored_units)
 
-    scored_desc_units = calc.variable_similarity(var_col, ["var_desc_1", "units_1"], "score_descUnits",
-                                                 desc_units_file_out)
+    score_name = "score_descUnits"
+    calc.init_cache(desc_units_file_out, score_name)
+    scored_desc_units = calc.variable_similarity(id_col, ["var_desc_1", "units_1"], score_name)
     # len(scored_desc_coding)  # 4013114
 
-    scored_desc_coding = calc.variable_similarity(var_col, ["var_desc_1", "var_coding_labels_1"],
-                                                  "score_descCoding", desc_coding_file_out)
+    score_name = "score_descCoding"
+    calc.init_cache(desc_coding_file_out, score_name)
+    scored_desc_coding = calc.variable_similarity(id_col, ["var_desc_1", "var_coding_labels_1"],
+                                                  score_name)
     # len(scored_desc_coding)  # 4013114
 
-    scored_desc_coding_units = calc.variable_similarity(var_col, ["var_desc_1", "units_1", "var_coding_labels_1"],
-                                                        "score_descCodingUnits", all_file_out)
+    score_name = "score_descCodingUnits"
+    calc.init_cache(all_file_out, score_name)
+    scored_desc_coding_units = calc.variable_similarity(id_col, ["var_desc_1", "units_1", "var_coding_labels_1"],
+                                                        score_name)
     # len(scored_full) #scored_desc_lab
 
     # Merge scores files and write to merged file- CURRENTLY "SCORED" data frame is not returned
