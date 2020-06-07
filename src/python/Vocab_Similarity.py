@@ -49,7 +49,7 @@ def preprocessor(data, id_col, defn_col):
         var = str(row[str(id_col[0])])
 
         # if defn_col is multiple columns,  concatenate text from all columns
-        if len(defn_col) ==1:
+        if len(defn_col) == 1:
             defn = str(row[str(defn_col[0])])
         else:
             defn_cols = [str(i) for i in row[defn_col]]  # type: List[str]
@@ -78,7 +78,8 @@ def preprocessor(data, id_col, defn_col):
     else:
         return vocab_dict
 
-def similarity_search(tfidf_matrix, index_var, top_n):
+
+def similarity_search(tfidf_matrix, ref_var_index, top_n):
     """
     The function calculates the cosine similarity between the index variables and all other included variables in the
     matrix. The results are sorted and returned as a list of lists, where each list contains a variable identifier
@@ -94,9 +95,10 @@ def similarity_search(tfidf_matrix, index_var, top_n):
     """
 
     # calculate similarity
-    cosine_similarities = linear_kernel(tfidf_matrix[index_var:index_var + 1], tfidf_matrix).flatten()
-    rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != index_var]
-    similar_variables = itertools.islice(((variable, cosine_similarities[variable]) for variable in rel_var_indices), top_n)
+    cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix).flatten()
+    rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
+    similar_variables = itertools.islice(((variable, cosine_similarities[variable]) for variable in rel_var_indices),
+                                         top_n)
 
     return similar_variables
 
@@ -105,14 +107,14 @@ def init_cache_output(cache, columns):
         with open(cache, "w") as f:
             f.write(",".join(columns))
             f.write("\n")
-        return cache
+        return file_name
     else:
-        return []
+        return pd.DataFrame()
 
 def cache_output(cache, data):
     if (isinstance(cache, str)):
         with  open(cache, "a") as f:
-            f.write(",".join([str(x) for x in data]))
+            f.write(",".join([str(x) for x in data.values()]))
             f.write("\n")
     else:
         cache.append(data)
@@ -184,7 +186,6 @@ def score_variables(score_name, id_col, data, filter_data, corpus, tfidf_matrix,
     # matching data in filtered file
     for num, row in pbar(filter_data.iterrows()):
         var = str(row[str(id_col[0])])
-
         # get index of filter data in corpus
         var_idx = [x for x, y in enumerate(corpus) if y[0] == var]
 
@@ -221,13 +222,15 @@ def score_variables(score_name, id_col, data, filter_data, corpus, tfidf_matrix,
     pbar.finish()
 
     # verify that we got all the matches we expected (assumes that we should be able to match all vars in filtered data)
+
     if matches != len(filter_data):
-        matched = round(matches/float(len(filter_data))*100, 2)
+        matched = round(matches / float(len(filter_data)) * 100, 2)
         raise ValueError('There is a problem - Only matched {0}% of filtered variables'.format(matched))
 
-    finalize_cached_output(file_name, cache, columns)
-    print("Filtering matched " + str(matches) + " of " + str(len(filter_data)) + " variables")
+    finalize_cached_output(file_name, cache)
 
+    print("Filtering matched " + str(matches) + " of " + str(len(filter_data)) + " variables")
+    return cache
 
 
 def variable_similarity(data, var_col, dataColsList, filter_data, score_name, fileOut):
@@ -251,24 +254,26 @@ def variable_similarity(data, var_col, dataColsList, filter_data, score_name, fi
 
 def merge_score_results(score_matrix1, score_matrix2, how):
     # determine how many rows should result when merging
-    #match = set(list(score_matrix1['matchID'])) - set(list(score_matrix2['matchID']))
-    #both = set(list(score_matrix2['matchID'])).intersection(set(list(score_matrix2['matchID'])))
+    # match = set(list(score_matrix1['matchID'])) - set(list(score_matrix2['matchID']))
+    # both = set(list(score_matrix2['matchID'])).intersection(set(list(score_matrix2['matchID'])))
 
     # merge data - left adding smaller data to larger file
     scored_merged = pd.merge(left=score_matrix1, right=score_matrix2,
-                             on=['matchID', 'conceptID', 'study_1', 'dbGaP_dataset_label_1','dbGaP_studyID_datasetID_1',
-                                 'varID_1','var_desc_1', 'timeIntervalDbGaP_1','cohort_dbGaP_1','metadataID_1',
-                                 'study_2', 'dbGaP_dataset_label_2','dbGaP_studyID_datasetID_2', 'varID_2',
-                                 'var_desc_2', 'timeIntervalDbGaP_2','cohort_dbGaP_2','metadataID_2'], how=how)
+                             on=['matchID', 'conceptID', 'study_1', 'dbGaP_dataset_label_1',
+                                 'dbGaP_studyID_datasetID_1',
+                                 'varID_1', 'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1', 'metadataID_1',
+                                 'study_2', 'dbGaP_dataset_label_2', 'dbGaP_studyID_datasetID_2', 'varID_2',
+                                 'var_desc_2', 'timeIntervalDbGaP_2', 'cohort_dbGaP_2', 'metadataID_2'], how=how)
 
-    return(scored_merged)
+    return (scored_merged)
+
 
 def main():
-
     metadataAllVarsFilePath = "/Users/laurastevens/Dropbox/Graduate School/Data and MetaData Integration/ExtractMetaData/tiff_laura_shared/FHS_CHS_ARIC_MESA_dbGaP_var_report_dict_xml_Info_contVarNA_NLP_timeInterval_noDate_noFU_5-9-19.csv"
     conceptMappedVarsFilePath = "/Users/laurastevens/Dropbox/Graduate School/Data and MetaData Integration/ExtractMetaData/CorrectConceptVariablesMapped_contVarNA_NLP.csv"
     ## READ IN DATA -- 07.17.19
-    data = pd.read_csv(metadataAllVarsFilePath , sep=",", quotechar='"', na_values="", low_memory=False) #when reading in data, check to see if there is "\r" if
+    data = pd.read_csv(metadataAllVarsFilePath, sep=",", quotechar='"', na_values="",
+                       low_memory=False)  # when reading in data, check to see if there is "\r" if
     # not then don't use "lineterminator='\n'", otherwise u
     data.units_1 = data.units_1.fillna("")
     data.dbGaP_dataset_label_1 = data.dbGaP_dataset_label_1.fillna("")
@@ -277,7 +282,7 @@ def main():
     len(data)
 
     # read in filtering file
-    filter_data = pd.read_csv(conceptMappedVarsFilePath, sep=",", na_values="", low_memory=False) #n=700
+    filter_data = pd.read_csv(conceptMappedVarsFilePath, sep=",", na_values="", low_memory=False)  # n=700
     filter_data.units_1 = filter_data.units_1.fillna("")
     filter_data.dbGaP_dataset_label_1 = filter_data.dbGaP_dataset_label_1.fillna("")
     filter_data.var_desc_1 = filter_data.var_desc_1.fillna("")
@@ -307,7 +312,7 @@ def main():
     # len(scored) #4013114
 
     scored_coding = variable_similarity(data, var_col, ["var_coding_labels_1"], filter_data, sep, "score_codeLab",
-                                         codingFileOut)
+                                        codingFileOut)
     # len(scored_coding)
 
     scored_units = variable_similarity(data, var_col, ["units_1"], filter_data, sep, "score_units", unitsFileOut)
@@ -318,11 +323,11 @@ def main():
     # len(scored_desc_coding)  # 4013114
 
     scored_desc_coding = variable_similarity(data, var_col, ["var_desc_1", "var_coding_labels_1"], filter_data, sep,
-                                              "score_descCoding", desc_codingFileOut)
+                                             "score_descCoding", desc_codingFileOut)
     # len(scored_desc_coding)  # 4013114
 
     scored_desc_coding_units = variable_similarity(data, var_col, ["var_desc_1", "units_1", "var_coding_labels_1"],
-                                                    filter_data, sep, "score_descCodingUnits", allFileOut)
+                                                   filter_data, sep, "score_descCodingUnits", allFileOut)
     # len(scored_full) #scored_desc_lab
 
     # Merge scores files and write to merged file- CURRENTLY "SCORED" data frame is not returned from score_variables-so merged code below will not work with this code.
@@ -334,20 +339,17 @@ def main():
     scored_merged = merge_score_results(scored_merged, scored_desc_coding_units, "outer")
 
     scored_merged.to_csv("tiff_laura_shared/NLP text Score "
-                         "results/FHS_CHS_MESA_ARIC_text_similarity_scores_All_Scores_MannuallyMappedConceptVars_7.17.19.csv", sep=",",
+                         "results/FHS_CHS_MESA_ARIC_text_similarity_scores_All_Scores_MannuallyMappedConceptVars_7.17.19.csv",
+                         sep=",",
                          encoding="utf-8", index=False, line_terminator="\n")
-
-
 
 
 if __name__ == "__main__":
     main()
 
-
-
 varDocFile = "tiff_laura_shared/FHS_CHS_ARIC_MESA_varDoc_dbGaPxmlExtract_timeIntervalAdded_May19_NLPversion.csv"
 manualMappedVarsFile = "data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv"
 ## READ IN DATA -- 07.17.19
-testData = pd.read_csv(varDocFile, sep=",", quotechar='"', na_values="", low_memory=False) # when reading in data, check
+testData = pd.read_csv(varDocFile, sep=",", quotechar='"', na_values="",
+                       low_memory=False)  # when reading in data, check
 #  to see if there is "\r" if # not then don't use "lineterminator='\n'", otherwise u
-
