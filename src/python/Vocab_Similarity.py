@@ -89,11 +89,13 @@ class MyTfidfVecctorizer(TfidfVectorizer):
 
 
 class CorpusBuilder:
-    def __init__(self, doc_col):
+    def __init__(self, doc_col, tfidf_type=None, representation=None):
 
         self.doc_col = doc_col
         self.tokenizer = RegexpTokenizer(r"\w+")
         self.lemmatizer = WordNetLemmatizer()
+        #self.tfidf_type =   None#tfidf_type or "single_corpus"
+        #self.representation = representation or "tfidf"
         self.tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
                                   lowercase=False)
         self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
@@ -123,10 +125,13 @@ class CorpusBuilder:
         :return:
         """
         # BUILD TF-IDF VECTORIZER
+        self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
+                                     lowercase=False)
 
         # CREATE MATRIX AND VECTORIZE DATA
         fit = self.tf.fit([content for _, content in self.corpus])
-        self.tfidf_matrix = self.tf.transform(fit)
+        self.tfidf_matrix = self.tf.transform([content for _, content in self.corpus])
+        #self.tf.vocabulary
         # self.fit.transform([content for corpus in self.corpora for _, content in corpus])
 
         # self.tfidf_matrix = self.tf.fit_transform([content for _, content in self.corpus])
@@ -186,6 +191,7 @@ class VariableSimilarityCalculator:
         self.filter_data = filter_data or data
         self.data = data
         self.pairable = pairable or vals_differ_in_col(id_col)
+
         self.select_scores = select_scores
         self.id_col = id_col
         self.score_cols = [self.id_col + filter_data_col_suffix,
@@ -210,6 +216,7 @@ class VariableSimilarityCalculator:
         # calculate similarity
         similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix)
         similarities = pd.DataFrame(data=similarities[0], columns=["idx", "score"])
+        similarities = similarities.loc[similarities['idx'] != ref_var_index]
         # cosine_similarities = ((i, score) for i, score in enumerate(cosine_similarities) if i != ref_var_index)
 
         return similarities
@@ -249,7 +256,7 @@ class VariableSimilarityCalculator:
         # retrieve top_n similar variables
         [self.append_cache(doc_id_1, d1,
                            corpus_builder.corpus[i][0],
-                           self.data.iloc[i,][self.data_cols_to_keep].rename(self.data_cols_to_keep, self.paired_cols),
+                           self.data.iloc[i, ][self.data_cols_to_keep].rename(self.data_cols_to_keep, self.paired_cols),
                            score)
          for i, score in ref_var_scores]
 
@@ -314,9 +321,9 @@ class VariableSimilarityCalculator:
         return self.score_variables(corpus_builder)
 
     def filter_scores(self, ref_var_scores, ref_id):
-        return ((pair_id, score)
-                for pair_id, score in ref_var_scores
-                if self.pairable(score, self.data, pair_id, self.filter_data, ref_id))
+        return ((pair_idx, score)
+                for pair_idx, score in ref_var_scores
+                if self.pairable(score, self.data, pair_idx, self.filter_data, ref_id))
 
 
 def merge_score_results(score_matrix1, score_matrix2, how):
