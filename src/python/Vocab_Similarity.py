@@ -11,8 +11,6 @@
 ##########################################################################################
 
 # read in needed libraries
-import itertools
-
 import nltk
 import pandas as pd
 from nltk.corpus import stopwords
@@ -210,12 +208,11 @@ class VariableSimilarityCalculator:
         """
 
         # calculate similarity
-        cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1],
-                                            tfidf_matrix)[0]
+        similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix)
+        similarities = pd.DataFrame(data=similarities[0], columns=["idx", "score"])
+        # cosine_similarities = ((i, score) for i, score in enumerate(cosine_similarities) if i != ref_var_index)
 
-        cosine_similarities = ((i, score) for i, score in enumerate(cosine_similarities) if i != ref_var_index)
-
-        return cosine_similarities
+        return similarities
 
     def init_cache(self, score_name, file_name=None):
         self.file_name = file_name
@@ -252,7 +249,7 @@ class VariableSimilarityCalculator:
         # retrieve top_n similar variables
         [self.append_cache(doc_id_1, d1,
                            corpus_builder.corpus[i][0],
-                           self.data.iloc[i, ][self.data_cols_to_keep].rename(self.data_cols_to_keep, self.paired_cols),
+                           self.data.iloc[i,][self.data_cols_to_keep].rename(self.data_cols_to_keep, self.paired_cols),
                            score)
          for i, score in ref_var_scores]
 
@@ -319,7 +316,7 @@ class VariableSimilarityCalculator:
     def filter_scores(self, ref_var_scores, ref_id):
         return ((pair_id, score)
                 for pair_id, score in ref_var_scores
-                if score > 0 and self.pairable(self.data, pair_id, self.filter_data, ref_id))
+                if self.pairable(score, self.data, pair_id, self.filter_data, ref_id))
 
 
 def merge_score_results(score_matrix1, score_matrix2, how):
@@ -351,8 +348,12 @@ def val_in_any_row_for_col(col):
 
 
 def select_top_sims(similarities, n):
-    top_similarities = [(i, similarities[i]) for i in similarities.argsort()[::-1]]
-    return itertools.islice(top_similarities, n)
+    return similarities.sort_values(["score"], ascending=False).take(n)
+
+
+def select_top_sims_by_group(similarities, n, data, group_col):
+    similarities.append(data[group_col])
+    return similarities.sort_values(["score"], ascending=False).groupby(by=[group_col]).take(n)
 
 
 def main():
@@ -395,10 +396,12 @@ def main():
 
     filter_data_cols_to_keep = data_cols_to_keep
 
-    def my_pred(s1, i1, s2, i2):
-        all([f(s1, i1, s2, i2)
-             for f in [val_in_any_row_for_col(disjoint_col),
-                       vals_differ_in_col(disjoint_col)]])
+    def my_pred(score, s1, i1, s2, i2):
+        bools = [f(s1, i1, s2, i2)
+                 for f in [val_in_any_row_for_col(disjoint_col),
+                           vals_differ_in_col(disjoint_col)]]
+        bools.append(score > 0)
+        return all(bools)
 
     top_n = len(data.index) - 1  # len(data) - 1  #
 
@@ -406,7 +409,8 @@ def main():
     calc = VariableSimilarityCalculator(data, id_col,
                                         filter_data=None,  # filter_data
                                         pairable=my_pred,
-                                        select_scores=lambda sims: select_top_sims(sims, top_n),
+                                        select_scores=lambda sims: select_top_sims_by_group(sims, top_n, data,
+                                                                                            disjoint_col),
                                         data_cols_to_keep=data_cols_to_keep,
                                         filter_data_cols_to_keep=filter_data_cols_to_keep)
 
