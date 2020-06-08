@@ -26,10 +26,8 @@ import scipy.sparse as sp
 
 from sklearn.utils.validation import check_array, FLOAT_DTYPES
 
-
 nltk.download('stopwords')
 nltk.download("wordnet")
-
 
 
 def _my_document_frequency(X):
@@ -38,6 +36,7 @@ def _my_document_frequency(X):
         return np.bincount(X.indices, minlength=X.shape[1])
     else:
         return np.diff(X.indptr)
+
 
 def my_fit(tfidf, X, y=None):
     """Learn the idf vector (global term weights)
@@ -64,9 +63,9 @@ def my_fit(tfidf, X, y=None):
         # suppressed entirely.
         idf = np.log(n_samples / df) + 1
         tfidf._idf_diag = sp.diags(idf, offsets=0,
-                                  shape=(n_features, n_features),
-                                  format='csr',
-                                  dtype=dtype)
+                                   shape=(n_features, n_features),
+                                   format='csr',
+                                   dtype=dtype)
 
     return tfidf
 
@@ -89,6 +88,7 @@ class MyTfidfVecctorizer(TfidfVectorizer):
         X = super(TfidfVectorizer, self).fit_transform(raw_documents)
         my_fit(self._tfidf, X)
         return self
+
 
 class CorpusBuilder:
     def __init__(self, doc_col):
@@ -127,12 +127,11 @@ class CorpusBuilder:
         # BUILD TF-IDF VECTORIZER
 
         # CREATE MATRIX AND VECTORIZE DATA
-        self.fit = self.tf.fit([content for var, content in self.corpus])
-
-
+        fit = self.tf.fit([content for _, content in self.corpus])
+        self.tfidf_matrix = self.tf.transform(fit)
         # self.fit.transform([content for corpus in self.corpora for _, content in corpus])
 
-        self.tfidf_matrix = self.tf.fit_transform([content for _, content in self.corpus])
+        # self.tfidf_matrix = self.tf.fit_transform([content for _, content in self.corpus])
 
     def build_corpus(self, data, id_col):
         """
@@ -167,16 +166,16 @@ class CorpusBuilder:
 class VariableSimilarityCalculator:
 
     def __init__(self, data, id_col, filter_data=None, pairable=None, data_cols_to_keep=None,
-                 filter_data_cols_to_keep=None, top_n=None,
-                 top_n_group=None):
+                 filter_data_cols_to_keep=None,
+                 select_scores=lambda scores: scores):
         """
 
+        :param select_scores:
         :param filter_data_cols_to_keep:
         :param filter_data: a pandas data frame containing variable information used to filter results
         containing the processed question definition
         :param data: pandas data frame containing variable information
         :param data_cols_to_keep:
-        :param top_n: number of results to return for each variable
         :param id_col: list of columns used to assemble question identifier
         """
         data_col_suffix = "_paired"
@@ -189,42 +188,34 @@ class VariableSimilarityCalculator:
         self.filter_data = filter_data or data
         self.data = data
         self.pairable = pairable or vals_differ_in_col(id_col)
-        self.top_n = top_n or len(data.index) - 1  # len(data) - 1  #
-        self.top_n_group = top_n_group
+        self.select_scores = select_scores
         self.id_col = id_col
         self.score_cols = [self.id_col + filter_data_col_suffix,
                            self.id_col.replace(filter_data_col_suffix, "") + data_col_suffix]
         self.cache = None
         self.file_name = None
 
-    def calculate_top_similarity(self):
-        return self.top_n
-
-    def similarity_search(self, corpus_builder, ref_var_index):
+    @staticmethod
+    def calculate_similarity(tfidf_matrix, ref_var_index):
         """
         The function calculates the cosine similarity between the index variables and all other included variables in
         the matrix. The results are sorted and returned as a list of lists, where each list contains a variable
         identifier and the cosine similarity score for the top set of similar variables as indicated by the input
         argument are returned.
 
-        :param corpus_builder:
+        :param tfidf_matrix:
         :param ref_var_index: an integer representing a variable id
         :return: a list of lists where each list contains a variable identifier and the cosine similarity
             score the top set of similar as indicated by the input argument are returned
         """
 
         # calculate similarity
-        cosine_similarities = linear_kernel(corpus_builder.tfidf_matrix[ref_var_index:ref_var_index + 1],
-                                            corpus_builder.tfidf_matrix).flatten()
-        rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
-        similar_variables = itertools.islice(
-            ((i, cosine_similarities[i]) for i in rel_var_indices),
-            self.top_n)
+        cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1],
+                                            tfidf_matrix)[0]
 
-        if self.top_n_group:
-            pass
+        cosine_similarities = ((i, score) for i, score in enumerate(cosine_similarities) if i != ref_var_index)
 
-        return similar_variables
+        return cosine_similarities
 
     def init_cache(self, score_name, file_name=None):
         self.file_name = file_name
@@ -252,22 +243,18 @@ class VariableSimilarityCalculator:
             self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
         print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
-    def row_func(self, row_idx, row, corpus_builder, var_idx, matches):
-        if var_idx:
-            matches += 1
-            ref_var_index = var_idx[0]
-            doc_id_1 = corpus_builder.corpus[ref_var_index][0]
-            d1 = row[self.filter_data_cols_to_keep]
-            d1.rename(self.filter_data_cols_to_keep, self.ref_cols)
+    def cache_sim_scores(self, ref_id, corpus_builder, corpus_idx_ref, ref_var_scores):
+        ref_var_index = corpus_idx_ref[0]
+        doc_id_1 = corpus_builder.corpus[ref_var_index][0]
+        d1 = self.data[self.filter_data_cols_to_keep].iloc(ref_id)
+        d1.rename(self.filter_data_cols_to_keep, self.ref_cols)
 
-            # retrieve top_n similar variables
-            [self.append_cache(doc_id_1, d1,
-                               corpus_builder.corpus[index][0],
-                               self.data[self.data_cols_to_keep].iloc([index]).rename(self.data_cols_to_keep,
-                                                                                      self.paired_cols),
-                               score)
-             for index, score in self.similarity_search(corpus_builder, ref_var_index)
-             if score > 0 and self.pairable(self.data, index, self.filter_data, row_idx)]
+        # retrieve top_n similar variables
+        [self.append_cache(doc_id_1, d1,
+                           corpus_builder.corpus[i][0],
+                           self.data.iloc[i, ][self.data_cols_to_keep].rename(self.data_cols_to_keep, self.paired_cols),
+                           score)
+         for i, score in ref_var_scores]
 
     def score_variables(self, corpus_builder):
         """
@@ -283,15 +270,22 @@ class VariableSimilarityCalculator:
 
         # tqdm.pandas(desc="Filtering the data")
         # filter_data.progress_apply(lambda row: ,axis=1)
+        self.data.set_index(self.data[self.id_col])
+        self.filter_data.set_index(self.filter_data[self.id_col])
 
         widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
         pbar = ProgressBar(widgets=widgets, maxval=len(self.filter_data))
         matches = 0
-        for i, row in pbar(self.filter_data.iterrows()):
-            var = str(row[str(self.id_col)])
+        for ref_id in pbar(self.filter_data[self.id_col]):
+            ref_id = str(ref_id)
             # get index of filter data in corpus
-            var_idx = [x for x, y in enumerate(corpus_builder.corpus) if y[0] == var]
-            self.row_func(i, row, corpus_builder, var_idx, matches)
+            corpus_idx_ref = [x for x, y in enumerate(corpus_builder.corpus) if y[0] == ref_id]
+            if corpus_idx_ref:
+                matches += 1
+                ref_var_scores = self.calculate_similarity(corpus_builder.tfidf_matrix, corpus_idx_ref[0])
+                ref_var_scores = self.select_scores(ref_var_scores)
+                ref_var_scores = self.filter_scores(ref_var_scores, ref_id)
+                self.cache_sim_scores(ref_id, corpus_builder, corpus_idx_ref, ref_var_scores)
 
         pbar.finish()
 
@@ -322,6 +316,11 @@ class VariableSimilarityCalculator:
         # SCORE DATA + WRITE OUT RESULTS
         return self.score_variables(corpus_builder)
 
+    def filter_scores(self, ref_var_scores, ref_id):
+        return ((pair_id, score)
+                for pair_id, score in ref_var_scores
+                if score > 0 and self.pairable(self.data, pair_id, self.filter_data, ref_id))
+
 
 def merge_score_results(score_matrix1, score_matrix2, how):
     # determine how many rows should result when merging
@@ -349,6 +348,11 @@ def vals_differ_in_all_cols(cols):
 
 def val_in_any_row_for_col(col):
     return lambda s1, s1_idx, s2, _: s1[col][s1_idx] in s2[col]
+
+
+def select_top_sims(similarities, n):
+    top_similarities = [(i, similarities[i]) for i in similarities.argsort()[::-1]]
+    return itertools.islice(top_similarities, n)
 
 
 def main():
@@ -391,14 +395,18 @@ def main():
 
     filter_data_cols_to_keep = data_cols_to_keep
 
-    my_pred = lambda s1, i1, s2, i2: all([f(s1, i1, s2, i2)
-                                          for f in [val_in_any_row_for_col(disjoint_col),
-                                                    vals_differ_in_col(disjoint_col)]])
+    def my_pred(s1, i1, s2, i2):
+        all([f(s1, i1, s2, i2)
+             for f in [val_in_any_row_for_col(disjoint_col),
+                       vals_differ_in_col(disjoint_col)]])
+
+    top_n = len(data.index) - 1  # len(data) - 1  #
 
     # SCORE DATA + WRITE OUT RESULTS
     calc = VariableSimilarityCalculator(data, id_col,
                                         filter_data=None,  # filter_data
                                         pairable=my_pred,
+                                        select_scores=lambda sims: select_top_sims(sims, top_n),
                                         data_cols_to_keep=data_cols_to_keep,
                                         filter_data_cols_to_keep=filter_data_cols_to_keep)
 
@@ -471,5 +479,5 @@ if __name__ == "__main__":
     manualMappedVarsFile = "data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv"
     # READ IN DATA -- 07.17.19
     testData = pd.read_csv(varDocFile, sep=",", quotechar='"', na_values="",
-                       low_memory=False)  # when reading in data, check
+                           low_memory=False)  # when reading in data, check
     #  to see if there is "\r" if # not then don't use "lineterminator='\n'", otherwise u
