@@ -30,3 +30,4 @@ class TestCorpusBuilder(TestCase):
         corpus_builder.calc_tfidf()
 
         assert corpus_builder.tfidf_matrix.shape == (nrows, 79)  # using
+        assert corpus_builder.tfidf_matrix[0, 75].round(10) == 0.3692482208

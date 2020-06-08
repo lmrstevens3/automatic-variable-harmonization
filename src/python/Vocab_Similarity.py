@@ -35,8 +35,13 @@ def _my_document_frequency(X):
     else:
         return np.diff(X.indptr)
 
+# n_corpus x n_word
+# len(coprora[0]) = 12
+# len(corpora[1]) = 5
+# [[log(2/(df1[0]/12 + df2[0]/5)),2,3,4]
+#  [log(2/(df1[0]/12 + df2[0]/5)),2,3,4]]
 
-def my_fit(tfidf, X, y=None):
+def my_fit(tfidf, Xs, y=None):
     """Learn the idf vector (global term weights)
 
     Parameters
@@ -44,33 +49,41 @@ def my_fit(tfidf, X, y=None):
     X : sparse matrix, [n_samples, n_features]
         a matrix of term/token counts
     """
-    X = check_array(X, accept_sparse=('csr', 'csc'))
-    if not sp.issparse(X):
-        X = sp.csr_matrix(X)
-    dtype = X.dtype if X.dtype in FLOAT_DTYPES else np.float64
+    full_df = 0
 
-    if tfidf.use_idf:
-        n_samples, n_features = X.shape
-        df = _my_document_frequency(X).astype(dtype)
+    for X in Xs:
+        X = check_array(X, accept_sparse=('csr', 'csc'))
+        if not sp.issparse(X):
+            X = sp.csr_matrix(X)
+        dtype = X.dtype if X.dtype in FLOAT_DTYPES else np.float64
 
-        # perform idf smoothing if required
-        df += int(tfidf.smooth_idf)
-        n_samples += int(tfidf.smooth_idf)
+        if tfidf.use_idf:
+            n_samples, n_features = X.shape
+            df = _my_document_frequency(X).astype(dtype)
 
-        # log+1 instead of log makes sure terms with zero idf don't get
-        # suppressed entirely.
-        idf = np.log(n_samples / df) + 1
-        tfidf._idf_diag = sp.diags(idf, offsets=0,
-                                   shape=(n_features, n_features),
-                                   format='csr',
-                                   dtype=dtype)
+            # perform idf smoothing if required
+            df += int(tfidf.smooth_idf)
+            n_samples += int(tfidf.smooth_idf)
+
+            full_df += df / n_samples
+
+
+    n_corpora = len(Xs)
+
+    # log+1 instead of log makes sure terms with zero idf don't get
+    # suppressed entirely.
+    idf = np.log(n_corpora / full_df) + 1
+    tfidf._idf_diag = sp.diags(idf, offsets=0,
+                               shape=(n_features, n_features),
+                               format='csr',
+                               dtype=dtype)
 
     return tfidf
 
 
 class MyTfidfVecctorizer(TfidfVectorizer):
 
-    def fit(self, raw_documents, y=None):
+    def fit(self, corpora, y=None):
         """Learn vocabulary and idf from training set.
 
         Parameters
@@ -83,8 +96,8 @@ class MyTfidfVecctorizer(TfidfVectorizer):
         self : TfidfVectorizer
         """
         self._check_params()
-        X = super(TfidfVectorizer, self).fit_transform(raw_documents)
-        my_fit(self._tfidf, X)
+        Xs = [super(TfidfVectorizer, self).fit_transform(raw_documents) for raw_documents in corpora]
+        my_fit(self._tfidf, Xs)
         return self
 
 
@@ -96,10 +109,10 @@ class CorpusBuilder:
         self.lemmatizer = WordNetLemmatizer()
         #self.tfidf_type =   None#tfidf_type or "single_corpus"
         #self.representation = representation or "tfidf"
-        self.tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
-                                  lowercase=False)
-        self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
-                                     lowercase=False)
+        # self.tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
+        #                           lowercase=False)
+        # self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
+        #                              lowercase=False)
         self.tfidf_matrix = None
         self.corpus = None
         self.corpora = None
@@ -125,16 +138,18 @@ class CorpusBuilder:
         :return:
         """
         # BUILD TF-IDF VECTORIZER
-        self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
-                                     lowercase=False)
+        corpora = [[content for _, content in self.corpus]]
+        vocabulary = list(set([tok for corpus in corpora for doc in corpus for tok in doc]))
 
+        self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
+                                     lowercase=False, vocabulary=vocabulary)
         # CREATE MATRIX AND VECTORIZE DATA
-        fit = self.tf.fit([content for _, content in self.corpus])
-        self.tfidf_matrix = self.tf.transform([content for _, content in self.corpus])
+        self.tf.fit(corpora)
+        self.tfidf_matrix = self.tf.transform(corpora[0])
         #self.tf.vocabulary
         # self.fit.transform([content for corpus in self.corpora for _, content in corpus])
 
-        # self.tfidf_matrix = self.tf.fit_transform([content for _, content in self.corpus])
+        self.tfidf_matrix = self.tf.fit_transform([content for _, content in self.corpus])
 
     def build_corpus(self, data, id_col):
         """
