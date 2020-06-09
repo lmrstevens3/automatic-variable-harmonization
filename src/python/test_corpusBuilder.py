@@ -8,26 +8,44 @@ class TestCorpusBuilder(TestCase):
     def test_calc_tfidf(self):
         file_path = "test_vocab_similarity_data.csv"
 
-        # READ IN DATA -- 07.17.19
-        data = pd.read_csv(file_path, sep=",", quotechar='"', na_values="",
-                           low_memory=False)  # when reading in data, check to see if there is "\r" if
-        # not then don't use "lineterminator='\n'", otherwise u
-        data.units_1 = data.units_1.fillna("")
-        data.dbGaP_dataset_label_1 = data.dbGaP_dataset_label_1.fillna("")
+        # Read in test data and sample for test
+        data = pd.read_csv(file_path, sep=",", quotechar='"', na_values="",  low_memory=False)
         data.var_desc_1 = data.var_desc_1.fillna("")
-        data.var_coding_labels_1 = data.var_coding_labels_1.fillna("")
 
         id_col = "varDocID_1"
 
-        # SCORE DATA + WRITE OUT
         nrows = 10
-        data = data.sample(nrows, random_state=22895)
+        data = [data.sample(nrows, random_state=22895)]
 
         doc_col = ["var_desc_1"]
         corpus_builder = CorpusBuilder(doc_col)
-        corpus_builder.build_corpus(data, id_col)
+        corpus_builder.build_corpora(data, id_col)
 
         corpus_builder.calc_tfidf()
 
         assert corpus_builder.tfidf_matrix.shape == (nrows, 79)  # using
         assert corpus_builder.tfidf_matrix[0, 75].round(10) == 0.3692482208
+
+
+    def test_multi_corpus_tfidf(self):
+        file_path = "test_vocab_similarity_data.csv"
+
+        # Read in test data
+        data = pd.read_csv(file_path, sep=",", quotechar='"', na_values="",low_memory=False)
+        data.var_desc_1 = data.var_desc_1.fillna("")
+
+        corpora_data = self.partition_by_column(data, column)
+
+        id_col = "varDocID_1"
+
+
+        doc_col = ["var_desc_1"]
+        corpus_builder = CorpusBuilder(doc_col)
+        corpus_builder.build_corpora(corpora_data, id_col)
+
+        corpus_builder.calc_tfidf()
+
+        #assert corpus_builder.tfidf_matrix.shape == (nrows, 79)  # using
+        #assert corpus_builder.tfidf_matrix[0, 75].round(10) == 0.3692482208
+
+
