@@ -1,5 +1,5 @@
 #get the top 2 matches for every variable and calculate the ratio between the top two matches' scores
-]topScoresRatioFunction <- function(data, variable){
+topScoresRatioFunction <- function(data, variable){
     data$score <- data[[variable]]
     data$rank <- data[[paste0("rank_", variable)]]
     top2scores <- data %>% group_by(dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2) %>% filter(rank == 1 | rank == 2) %>% 
@@ -18,7 +18,7 @@ percentTopScoreFunction <- function(data,variable){
     return(percentScoresData)
 }
 
-rankDataFile <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/FHS_CHS_MESA_ARIC_all_scores_ranked_ManuallyMappedConceptVars_3.17.20.csv'
+rankDataFile <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/FHS_CHS_MESA_ARIC_all_scores_ranked_ManuallyMappedConceptVars2.csv'
 rankData <- fread(rankDataFile , header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
 
 scoreRatioDataNoisyOr <- topScoresRatioFunction(rankData ,"score_desc_SqNoisyOr_maxOtherMeta_euclidean")
@@ -33,13 +33,100 @@ F1scoreHeuristicsData <- scoreRatioData %>% mutate(bin_topScoreRatio = applyQuan
 F1scoreHeuristicsHeatmapData <- F1scoreHeuristicsData %>% spread(bin_scoreThreshold, ratio_threshold_recall)
 pheatmap(as.matrix(F1scoreHeuristicsHeatmapData), clusterrows = F, clustercols = F)
 
-#check rank Data and rank Differences 
-decreased_scores <- rankData %>% group_by(concept, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2) %>% mutate(rankDiff_desc_noisyOR = rank_score_desc - rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean) %>% ungroup() %>%
-    select(concept, reference_variable,  study1_var_coding_counts_distribution, matched_variable, study2_var_coding_counts_distribution, score_desc, rank_score_desc, score_desc_SqNoisyOr_maxOtherMeta_euclidean, rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean, rankDiff_desc_noisyOR, correctMatchTrue, totalPossibleMatches, top10predMatches_score_desc, top5predMatches_score_desc, topPredMatches_score_desc, top10predMatches_score_desc_SqNoisyOr_maxOtherMeta_euclidean, top5predMatches_score_desc_SqNoisyOr_maxOtherMeta_euclidean, topPredMatches_score_desc_SqNoisyOr_maxOtherMeta_euclidean) %>% #, descriptionCode_TextScore.RANK_DIFF.description_TextScore) %>% #, text_noisyOr_continuous_distribution_score_metricsError, text_noisyOr_continuous_distribution_score_metricsError_rank) %>% 
-    filter(concept %in% c("alcohol intake (gm)", "Coffee Intake (cups/day)", "sodium intake (mg)", "stroke", "systolic murmur (grade)"), correctMatchTrue) 
-#rankData %>% group_by(concept, dbGaP_studyID_datasetID_varID_1, studyID_datasetID_2) %>% ungroup() %>% 
-#    select(concept, reference_variable, matched_variable, score_varDescOnly, score_varDescOnly_rank, score_allText,  errorBetweenMetricsScore, allText_SqNoisyOr_MetricsError, allText_SqNoisyOr_MetricsError_rank, correctMatchTrue) %>% #, descriptionCode_TextScore.RANK_DIFF.description_TextScore) %>% #, text_noisyOr_continuous_distribution_score_metricsError, text_noisyOr_continuous_distribution_score_metricsError_rank) %>% 
-#    filter(concept == "alcohol intake (gm)", correctMatchTrue)
+#check rank Data and rank Differences
+timestamp()
+decreased_scores <- rankData %>% 
+    group_by(concept, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2) %>% 
+    filter(sum(correctMatchTrue) > 0) %>% ungroup() %>% rowwise() %>%
+    filter(!sum(is.na(c(rank_score_desc,  
+                       rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean, 
+                       rank_score_desc_SqNoisyOr_codeLabRelativeDistance, 
+                       rank_score_desc_SqNoisyOr_codeLabEuclidean, 
+                       rank_score_descCodeLabUnits)), na.rm = T) == 5) %>% 
+    mutate(max_rank = max(c(rank_score_desc,  
+                            rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean, 
+                            rank_score_desc_SqNoisyOr_codeLabRelativeDistance, 
+                            rank_score_desc_SqNoisyOr_codeLabEuclidean)), 
+           min_rank = min(c(rank_score_desc,  
+                            rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean, 
+                            rank_score_desc_SqNoisyOr_codeLabRelativeDistance, 
+                            rank_score_desc_SqNoisyOr_codeLabEuclidean))) %>% ungroup() %>%
+    group_by(concept, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2) %>% 
+    mutate(correctMatch_max_rank = max(unique(max_rank[correctMatchTrue == T]))) %>%
+    ungroup() %>% filter(max_rank <= correctMatch_max_rank) %>% select(concept, 
+                       reference_variable, matched_variable, 
+                       dbGaP_studyID_datasetID_1, dbGaP_studyID_datasetID_2,  
+                       rank_score_desc,  
+                       rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean, 
+                       rank_score_desc_SqNoisyOr_codeLabRelativeDistance, 
+                       rank_score_desc_SqNoisyOr_codeLabEuclidean, 
+                       rank_score_descCodeLabUnits, 
+                       max_rank, correctMatch_max_rank, min_rank, correctMatchTrue, 
+                       var_coding_counts_distribution_1, var_coding_counts_distribution_2,
+                       score_desc, score_descCodeLabUnits, score_units, 
+                       score_codeLab_relativeDist, score_codeLab, score_codeLab_euclidean, 
+                       score_desc_SqNoisyOr_codeLabRelativeDistance, score_desc_SqNoisyOr_codeLabEuclidean,
+                       dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_varID_2)
+timestamp()
+
+#check units similarity for variables that aren't continuous
+continuous_unit_pairings <- rankData %>% dplyr::filter(score_units > 0) %>%
+    dplyr::filter(grepl('(?:max|min|mean|median|sd)[ ]*=[ ]*(?:\\d|.\\d)*;+', var_coding_counts_distribution_1) & 
+                      grepl('(?:max|min|mean|median|sd)[ ]*=[ ]*(?:\\d|.\\d)*;+', var_coding_counts_distribution_2)) %>%
+    dplyr::select(reference_variable, matched_variable,  
+                  score_units, units_1, units_2, 
+                  score_codeLab, var_coding_counts_distribution_1, var_coding_counts_distribution_2)
+
+#95% of pairings with similarity score for units are continuous variables (98% if score_desc > 0)
+summary_rankData <- head(rankData, 10) %>% dplyr::filter(score_desc > 0) %>% 
+    dplyr::select(concept,reference_variable, matched_variable,
+           matches("^(?:score_|rank_)"), correctMatchTrue, 
+           units_1, units_2, 
+           var_coding_counts_distribution_1, var_coding_counts_distribution_2,
+           dbGaP_studyID_datasetID_1, dbGaP_studyID_datasetID_2,
+           dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_varID_2) %>%
+    mutate(ref_var_continuous = grepl('(?:max|min|mean|median|sd)[ ]*=[ ]*(?:\\d|.\\d)*;+', var_coding_counts_distribution_1), 
+           paired_var_continuous = grepl('(?:max|min|mean|median|sd)[ ]*=[ ]*(?:\\d|.\\d)*;+', var_coding_counts_distribution_2)) %>%
+    mutate(pairing_data_type = rowSums(select(.,"ref_var_continuous", "paired_var_continuous")),
+           pairing_data_type = plyr::mapvalues(pairing_data_type, c(0,1,2), c("categorical", "categorical_continous", "continous"))) %>%
+    tidyr::gather(key = noisy_score_type, value = noisy_score, -c(matches("ID|var|units|correctMatchTrue|^rank_|^score_(?:![\\w_]*_SqNoisyOr_)")))%>%
+    #group_by( dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_varID_2) %>% 
+    mutate(noisy_all_eql  = length(unique(noisy_score) == 0), 
+           noisy_scores  = gsub("\\|score_units((?:E|R))", "\\L\\1", 
+                                gsub("_SqNoisyOr(?:_codeLab|_maxOtherMeta_\\w+$)", "|score_codeLab_|score_units",noisy_score_type))) 
+#add more things
+summary_rankData <- summarise_(total_pairs = n(), 
+               continous_pairs = sum(ref_var_continous & paired_var_continous), 
+               continuous_categorical_pairs = sum(!ref_var_continous == paired_var_continous), 
+               categorical_pairs = sum(!(ref_var_continous & paired_var_continous))) 
+               
+               
+    
+
+
+#
+
+#test creating correctMatchTrue Variable
+dbp_t <- rankData %>% filter(conceptID == "DBP") %>% left_join(conceptMappedVarsData)
+system.time({
+    match_test1 <- dbp_t %>% group_by(dbGaP_studyID_datasetID_varID_1,  dbGaP_studyID_datasetID_varID_2) %>% 
+    dplyr::mutate(correctMatchTrue_test1 = isCorrectMatch(dbGaP_studyID_datasetID_varID_2, possiblePairingsInConcept))
+})
+
+system.time({
+    match_test2 <- dbp_t %>% group_by(concept) %>%  
+        mutate(correctMatchTrue_test2 = dbGaP_studyID_datasetID_varID_2 %in% dbGaP_studyID_datasetID_varID_1) 
+})
+
+system.time({
+    match_test3 <- dbp_t %>% group_by(dbGaP_studyID_datasetID_varID_1,  dbGaP_studyID_datasetID_varID_2) %>% 
+        tidyr::separate_rows(possiblePairingsInConcept, sep = "; ", convert = FALSE) %>% 
+        group_by(concept) %>%  
+        mutate(correctMatchTrue_test3 = dbGaP_studyID_datasetID_varID_2 %in% possiblePairingsInConcept) 
+})
+
+#filter(concept %in% c("alcohol intake (gm)", "Coffee Intake (cups/day)", "sodium intake (mg)", "stroke", "systolic murmur (grade)"), correctMatchTrue) 
+
 
 #look a variable distribution scores differnences when using euclidean vs. relative distance
 library(plotly)
