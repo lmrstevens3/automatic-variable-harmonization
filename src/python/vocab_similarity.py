@@ -1,5 +1,5 @@
 ##########################################################################################
-# Vocab_Similarity.py
+# vocab_similarity.py
 # author: TJ Callahan, Laura Stevens
 # Purpose: script reads in a csv files of variable documentation including some or all of
 #           descriptions, units, as well as coding labels and pairs all variables against all other
@@ -15,6 +15,7 @@ import nltk
 import pandas as pd
 from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
+import sklearn.feature_extraction.text
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 from nltk.stem import WordNetLemmatizer
@@ -28,38 +29,28 @@ nltk.download('stopwords')
 nltk.download("wordnet")
 
 
-def _my_document_frequency(X):
-    """Count the number of non-zero values for each feature in sparse X."""
-    if sp.isspmatrix_csr(X):
-        return np.bincount(X.indices, minlength=X.shape[1])
-    else:
-        return np.diff(X.indptr)
-
-# n_corpus x n_word
-# len(coprora[0]) = 12
-# len(corpora[1]) = 5
-# [[log(2/(df1[0]/12 + df2[0]/5)),2,3,4]
-#  [log(2/(df1[0]/12 + df2[0]/5)),2,3,4]]
-
-def my_fit(tfidf, Xs, y=None):
+def fit_corpora(tfidf, Xs):
     """Learn the idf vector (global term weights)
 
     Parameters
     ----------
-    X : sparse matrix, [n_samples, n_features]
+    Xs : list of sparse matricies, X [n_samples, n_features]
         a matrix of term/token counts for each corpus in Xs
+
+    tfidf: TfidfVectorizer._tfidf object
     """
     full_df = 0
+    if tfidf.use_idf:
+        n_samples, n_features = Xs[0].shape
+        dtype = Xs[0].dtype if Xs[0].dtype in FLOAT_DTYPES else np.float64
+        for X in Xs:
+            X = check_array(X, accept_sparse=('csr', 'csc'))
+            if not sp.issparse(X):
+                X = sp.csr_matrix(X)
 
-    for X in Xs:
-        X = check_array(X, accept_sparse=('csr', 'csc'))
-        if not sp.issparse(X):
-            X = sp.csr_matrix(X)
-        dtype = X.dtype if X.dtype in FLOAT_DTYPES else np.float64
+            n_samples, _ = X.shape
 
-        if tfidf.use_idf:
-            n_samples, n_features = X.shape
-            df = _my_document_frequency(X).astype(dtype)
+            df = _document_frequency(X).astype(dtype)
 
             # perform idf smoothing if required
             df += int(tfidf.smooth_idf)
@@ -67,20 +58,20 @@ def my_fit(tfidf, Xs, y=None):
 
             full_df += df / n_samples
 
-    n_corpora = len(Xs)
+        n_corpora = len(Xs)
 
-    # log+1 instead of log makes sure terms with zero idf don't get
-    # suppressed entirely.
-    idf = np.log(n_corpora / full_df) + 1
-    tfidf._idf_diag = sp.diags(idf, offsets=0,
-                               shape=(n_features, n_features),
-                               format='csr',
-                               dtype=dtype)
+        # log+1 instead of log makes sure terms with zero idf don't get
+        # suppressed entirely.
+        idf = np.log(n_corpora / full_df) + 1
+        tfidf._idf_diag = sp.diags(idf, offsets=0,
+                                   shape=(n_features, n_features),
+                                   format='csr',
+                                   dtype=dtype)
 
     return tfidf
 
 
-class MyTfidfVecctorizer(TfidfVectorizer):
+class CorporaTfidfVectorizer(TfidfVectorizer):
 
     def fit(self, corpora, y=None):
         """Learn vocabulary and idf for each corpus in corpora.
@@ -95,25 +86,21 @@ class MyTfidfVecctorizer(TfidfVectorizer):
         self : TfidfVectorizer
         """
         self._check_params()
-        Xs = [super(TfidfVectorizer, self).fit_transform(raw_documents) for raw_documents in corpora]
-        my_fit(self._tfidf, Xs)
+        Xs = [super(self).fit_transform(raw_documents) for raw_documents in corpora]
+        fit_corpora(self._tfidf, Xs)
         return self
 
 
 class CorpusBuilder:
-    def __init__(self, doc_col, tfidf_type=None, representation=None):
+    def __init__(self, doc_col, representation=None):
 
         self.doc_col = doc_col
         self.tokenizer = RegexpTokenizer(r"\w+")
         self.lemmatizer = WordNetLemmatizer()
-        #self.tfidf_type =   None#tfidf_type or "single_corpus"
-        #self.representation = representation or "tfidf"
-        # self.tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
-        #                           lowercase=False)
-        # self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
-        #                              lowercase=False)
+        # self.tfidf_type =   None#tfidf_type or "single_corpus"
+        # self.representation = representation or "tfidf"
+        self.tf = None
         self.tfidf_matrix = None
-        #self.corpus = None
         self.corpora = None
 
     def lemmatize_variable_documentation(self, var, doc_text):
@@ -130,31 +117,28 @@ class CorpusBuilder:
 
         return var, doc_lemma
 
-    def calc_tfidf(self):
+    def calc_tfidf(self, vocabulary=None):
         """
         Create a matrix where each row represents a variables and each column represents a word and counts are
         weighted by TF-IDF- matrix is n variable (row) X N all unique words in all documentation (cols)
         :return:
+        TFIDFVectorizer with updated matrix of TF-IDF features
         """
         # BUILD TF-IDF VECTORIZER
-        vocabulary = list(set([tok for corpus in self.corpora for _, doc in corpus for tok in doc]))
+        vocab = vocabulary or list(set([tok for corpus in self.corpora for _, doc in corpus for tok in doc]))
 
-        self.tf = MyTfidfVecctorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
-                                     lowercase=False, vocabulary=vocabulary)
+        self.tf = CorporaTfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
+                                         lowercase=False, vocabulary=vocab)
 
         corpus_all = self.all_docs()
         # CREATE MATRIX AND VECTORIZE DATA
         corpora = [[doc for _, doc in corpus] for corpus in self.corpora]
         self.tf.fit(corpora)
         self.tfidf_matrix = self.tf.transform(corpus_all)
-        #self.tf.vocabulary
-        # self.fit.transform([content for corpus in self.corpora for _, content in corpus])
-
-        #self.tfidf_matrix = self.tf.fit_transform([content for _, content in self.corpora[0]])
-
 
     def build_corpora(self, corpora_data, id_col):
         """Using a list of dataframes, create a corpus for each dataframe in the list c
+        :param id_col: column name of uniqueIDs for documents in the dataframe
         :param corpora_data: a list of dataframes containing the data to be turned into a corpus. Each dataframe in the list
         should have a unique ID that is universal to all dataframes in the list and should have the same doc_cols/id_col names
         :return a list, where each item is the lists of lists returned from build_corpus.
@@ -164,10 +148,8 @@ class CorpusBuilder:
         corpora = [self.build_corpus(corpus_data, id_col) for corpus_data in corpora_data]
         self.corpora = corpora
 
-
     def all_docs(self):
         return [doc for corpus in self.corpora for _, doc in corpus]
-
 
     def build_corpus(self, corpus_data, id_col):
         """
@@ -184,8 +166,7 @@ class CorpusBuilder:
         # widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
         # pbar = ProgressBar(widgets=widgets, maxval=len(data))
 
-        cols = list(self.doc_col)
-        cols.append(id_col)
+        cols = list(self.doc_col).append(id_col)
         corpus = [self.lemmatize_variable_documentation(row[len(self.doc_col)], row[:-1])
                   for row in corpus_data[cols].as_matrix()]
 
@@ -196,7 +177,7 @@ class CorpusBuilder:
             matched = round(len(corpus) / float(len(corpus_data)) * 100, 2)
             raise ValueError('There is a problem - Only matched {0}% of variables were processed'.format(matched))
         else:
-            return(corpus)
+            return corpus
 
 
 class VariableSimilarityCalculator:
@@ -211,7 +192,7 @@ class VariableSimilarityCalculator:
         if not score_cols:
             score_cols = ["reference var", "paired var", "score"]
         self.ref_ids = ref_ids
-        self.pairable = pairable #or vals_differ_in_col(id_col)
+        self.pairable = pairable  # or vals_differ_in_col(id_col)
 
         self.select_scores = select_scores
         self.score_cols = score_cols
@@ -290,7 +271,7 @@ class VariableSimilarityCalculator:
             ref_id = str(ref_id)
             # get index of filter data in corpus
             corpus_ref_idx = corpus_doc_ids.index(ref_id)
-            if corpus_ref_idx :
+            if corpus_ref_idx:
                 matches += 1
                 ref_var_scores = self.calculate_similarity(tfidf, corpus_ref_idx)
                 ref_var_scores = self.select_scores(ref_var_scores)
@@ -406,12 +387,14 @@ def main():
 
     save_dir = "tiff_laura_shared/NLP text Score results/"
     # file_name_format = save_dir + "FHS_CHS_MESA_ARIC_text_similarity_scores_%s_ManuallyMappedConceptVars_7.17.19.csv"
+    #ref_suffix = "_1"
+    #pairing_suffix = "_2"
+    # score_cols = [id_col + ref_suffix,
+    #                 id_col.replace(pairing_suffix, "") + pairing_suffix]
     file_name_format = save_dir + "test_%s_vocab_similarity.csv"
     disjoint_col = 'dbGaP_studyID_datasetID_1'
-    data_cols_to_keep = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
-                         'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
-
-    filter_data_cols_to_keep = data_cols_to_keep
+    #data_cols_to_keep = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
+    #                     'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
 
     def my_pred(score, s1, i1, s2, i2):
         bools = [f(s1, i1, s2, i2)
@@ -420,13 +403,8 @@ def main():
         bools.append(score > 0)
         return all(bools)
 
-    top_n = len(data.index) - 1  # len(data) - 1  #
-    ref_suffix = "_1"
-    pairing_suffix = "_2"
-    # score_cols = [id_col + ref_suffix,
-    #                 id_col.replace(pairing_suffix, "") + pairing_suffix]
+    top_n = len(data) - 1
 
-    # SCORE DATA + WRITE OUT RESULTS
     calc = VariableSimilarityCalculator(filter_data[id_col],
                                         pairable=my_pred,
                                         select_scores=lambda sims: select_top_sims_by_group(sims, top_n, data,
