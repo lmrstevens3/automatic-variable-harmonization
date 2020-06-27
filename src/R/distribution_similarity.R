@@ -6,18 +6,18 @@ library(multidplyr)
 
 #create a numeric vector from string stored in var_coding_counts_distribution_1 column of metadata
 getDistDataFunction <- function(varDistString){
-    varDist = strsplit(varDistString, ';')[[1]]
-    varDist = sort(varDist[grep("median=-[0-9]| min=-[0-9]| max=-[0-9]| median=[0-9]| sd=[0-9]| min=[0-9]| max=[0-9]", varDist)])
-    varDistStatNames = gsub( '=[0-9].*|=-[0-9].*', "", sort(varDist[grep("median=-[0-9]| min=-[0-9]| max=-[0-9]| median=[0-9]| sd=[0-9]| min=[0-9]| max=[0-9]", varDist)]))
-    if(sum(c(" max"," median", " min", " sd") %in% varDistStatNames) < 3){return(NULL)}
+    varDist = strsplit(varDistString, '; ')[[1]]
+    varDist = sort(varDist[grep("median=[-]*[0-9]|min=[-]*[0-9]|max=[-]*[0-9]|sd=[0-9]|nulls=[0-9]", varDist)])
+    varDistStatNames = gsub( '=[0-9].*|=-[0-9].*', "", sort(varDist[grep("median=[-]*[0-9]|min=[-]*[0-9]|max=[-]*[0-9]|sd=[0-9]|nulls=[0-9]", varDist)]))
+    if(sum(c("max","median", "min", "nulls", "sd") %in% varDistStatNames) < 3){return(NULL)}
     varDist = gsub(".*=", "", varDist)
     if(sum(is.na(as.numeric(varDist))) > 0) {print(paste0("NA in VarDist!!!!!!!!!!!!!!!!!!!!!!!!!!!!!: ", varDistString))}
     varDist = as.numeric(varDist)
     names(varDist) <- varDistStatNames
-    varDist[!c(" max"," median", " min", " sd") %in% varDistStatNames] <- NA
-    varRange = varDist[' max']-varDist[' min']
+    varDist[!c("max","median", "min", "nulls", "sd") %in% varDistStatNames] <- NA
+    varRange = varDist['max']-varDist['min']
     varDist = c(varDist, varRange)
-    names(varDist) = c(c(" max"," median", " min", " sd"), "range")
+    names(varDist) = c(c("max","median", "min", "nulls", "sd"), "range")
     return(varDist)
 }
 
