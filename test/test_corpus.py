@@ -1,16 +1,22 @@
-import pandas as pd
-import numpy as np
-from unittest import TestCase
-from sklearn.feature_extraction.text import TfidfVectorizer
 import os
+from unittest import TestCase
 
-from src.python.vocab_similarity import CorpusBuilder, partition
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+from corpus import CorpusBuilder
+
+import pandas as pd
+
+from vocab_similarity import partition
 
 
 class TestCorpusBuilder(TestCase):
+    def test_lemmatize_variable_documentation(self):
+        self.fail()
+
     def test_calc_tfidf(self):
         print(os.getcwd())
-        file_path = "../../tests/test_vocab_similarity_data.csv"
+        file_path = "test_vocab_similarity_data.csv"
 
         # Read in test data and sample for test
         data = pd.read_csv(file_path, sep=",", quotechar='"', na_values="", low_memory=False)
@@ -41,7 +47,7 @@ class TestCorpusBuilder(TestCase):
         assert (corpus_builder.tfidf_matrix.nnz != check_tfidf.nnz) == 0
 
     def test_calc_tfidf_multi_corpus(self):
-        file_path = "../../tests/test_vocab_similarity_data.csv"
+        file_path = "test_vocab_similarity_data.csv"
         # Read in test data
         data = pd.read_csv(file_path, sep=",", quotechar='"', na_values="", low_memory=False)
         data.var_desc_1 = data.var_desc_1.fillna("")
@@ -76,3 +82,13 @@ class TestCorpusBuilder(TestCase):
         assert [round(f, 13) for f in dfs['nutrient']] == [round(f, 13) for f in [12.0/502, 2.0/207, 8.0/160, 1.0/135]]
         assert [round(f, 13) for f in dfs['left']] == [round(f, 13) for f in [16.0/502, 55.0/207, 14.0/160, 3.0/135]]
         assert [round(f, 13) for f in dfs['number']] == [round(f, 13) for f in [16.0/502, 43.0/207, 5.0/160, 12.0/135]]
+
+
+    def test_build_corpora(self):
+        self.fail()
+
+    def test_all_docs(self):
+        self.fail()
+
+    def test_build_corpus(self):
+        self.fail()
