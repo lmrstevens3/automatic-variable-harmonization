@@ -19,6 +19,7 @@ from sklearn.metrics.pairwise import linear_kernel
 
 from corpus import CorpusBuilder
 
+# Move to the script
 nltk.download('stopwords')
 nltk.download("wordnet")
 
