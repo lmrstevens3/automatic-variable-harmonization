@@ -15,8 +15,8 @@ import nltk
 import pandas as pd
 from nltk.corpus import stopwords
 from nltk.tokenize import RegexpTokenizer
-import sklearn.feature_extraction.text
-from sklearn.feature_extraction.text import TfidfVectorizer
+# noinspection PyProtectedMember
+from sklearn.feature_extraction.text import TfidfVectorizer, _document_frequency
 from sklearn.metrics.pairwise import linear_kernel
 from nltk.stem import WordNetLemmatizer
 from progressbar import ProgressBar, FormatLabel, Percentage, Bar
@@ -84,6 +84,8 @@ class CorporaTfidfVectorizer(TfidfVectorizer):
         Returns
         -------
         self : TfidfVectorizer
+        :param corpora: corpora list
+        :param y:
         """
         self._check_params()
         Xs = [super(self).fit_transform(raw_documents) for raw_documents in corpora]
@@ -92,7 +94,7 @@ class CorporaTfidfVectorizer(TfidfVectorizer):
 
 
 class CorpusBuilder:
-    def __init__(self, doc_col, representation=None):
+    def __init__(self, doc_col):
 
         self.doc_col = doc_col
         self.tokenizer = RegexpTokenizer(r"\w+")
@@ -356,7 +358,8 @@ def select_top_sims_by_group(similarities, n, data, group_col):
 
 def main():
     dropbox_dir = "/Users/laurastevens/Dropbox/Graduate School/Data and MetaData Integration/ExtractMetaData/"
-    metadata_all_vars_file_path = dropbox_dir + "tiff_laura_shared/FHS_CHS_ARIC_MESA_dbGaP_var_report_dict_xml_Info_contVarNA_NLP_timeInterval_noDate_noFU_5-9-19.csv"
+    metadata_all_vars_file_path = dropbox_dir + "tiff_laura_shared/FCAMD_var_report_NLP_missing_contVars.csv" \
+                                                "FHS_CHS_ARIC_MESA_dbGaP_var_report_dict_xml_Info_contVarNA_NLP_timeInterval_noDate_noFU_5-9-19.csv"
     concept_mapped_vars_file_path = dropbox_dir + "CorrectConceptVariablesMapped_contVarNA_NLP.csv"
 
     # READ IN DATA -- 07.17.19
@@ -387,13 +390,14 @@ def main():
 
     save_dir = "tiff_laura_shared/NLP text Score results/"
     # file_name_format = save_dir + "FHS_CHS_MESA_ARIC_text_similarity_scores_%s_ManuallyMappedConceptVars_7.17.19.csv"
-    #ref_suffix = "_1"
-    #pairing_suffix = "_2"
+    # ref_suffix = "_1"
+    # pairing_suffix = "_2"
     # score_cols = [id_col + ref_suffix,
     #                 id_col.replace(pairing_suffix, "") + pairing_suffix]
     file_name_format = save_dir + "test_%s_vocab_similarity.csv"
     disjoint_col = 'dbGaP_studyID_datasetID_1'
-    #data_cols_to_keep = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
+
+    # data_cols_to_keep = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
     #                     'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
 
     def my_pred(score, s1, i1, s2, i2):
