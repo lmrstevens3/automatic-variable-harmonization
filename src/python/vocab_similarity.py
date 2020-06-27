@@ -88,7 +88,7 @@ class CorporaTfidfVectorizer(TfidfVectorizer):
         :param y:
         """
         self._check_params()
-        Xs = [super(self).fit_transform(raw_documents) for raw_documents in corpora]
+        Xs = [super(TfidfVectorizer, self).fit_transform(raw_documents) for raw_documents in corpora]
         fit_corpora(self._tfidf, Xs)
         return self
 
@@ -168,7 +168,8 @@ class CorpusBuilder:
         # widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
         # pbar = ProgressBar(widgets=widgets, maxval=len(data))
 
-        cols = list(self.doc_col).append(id_col)
+        cols = list(self.doc_col)
+        cols.append(id_col)
         corpus = [self.lemmatize_variable_documentation(row[len(self.doc_col)], row[:-1])
                   for row in corpus_data[cols].as_matrix()]
 
