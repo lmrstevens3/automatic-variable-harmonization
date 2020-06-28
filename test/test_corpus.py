@@ -6,13 +6,15 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from corpus import CorpusBuilder
 
 import pandas as pd
+import numpy as np
 
 from vocab_similarity import partition
 
 
 class TestCorpusBuilder(TestCase):
     def test_lemmatize_variable_documentation(self):
-        self.fail()
+        result = CorpusBuilder(["hello"]).lemmatize_variable_documentation("x", ["hey there little lady"])
+        assert result == ("x", ["hey", "little", "lady"])
 
     def test_calc_tfidf(self):
         print(os.getcwd())

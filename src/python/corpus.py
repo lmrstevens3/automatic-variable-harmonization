@@ -16,9 +16,9 @@ class CorpusBuilder:
         self.tfidf_matrix = None
         self.corpora = None
 
-    def lemmatize_variable_documentation(self, var, doc_text):
+    def lemmatize_variable_documentation(self, var, doc_text):  # TODO See if var really needs to be passed here
         # if doc_col is multiple columns,  concatenate text from all columns
-        doc = " ".join([str(i) for i in doc_text])
+        doc = " ".join([str(col) for col in doc_text])
 
         # tokenize & remove punctuation
         tok_punc_doc = self.tokenizer.tokenize(doc.lower())
