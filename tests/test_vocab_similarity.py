@@ -44,8 +44,12 @@ class TestVariableSimilarityCalculator(TestCase):
 
     def test_filter_scores(self):
         v = VariableSimilarityCalculator(['x'])
-        result = v.filter_scores([('x', 10)], 'x')
-        assert result == [('x', 10)]
+
+        scores = [(1, 0.1188), (2, 0.1104), (3, 0)]
+
+        result = list(v.filter_scores(scores, 'x'))
+
+        assert result == scores
 
 
 class Test(TestCase):
