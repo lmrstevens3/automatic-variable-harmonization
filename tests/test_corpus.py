@@ -85,6 +85,17 @@ class TestCorpusBuilder(TestCase):
         assert [round(f, 13) for f in dfs['left']] == [round(f, 13) for f in [16.0/502, 55.0/207, 14.0/160, 3.0/135]]
         assert [round(f, 13) for f in dfs['number']] == [round(f, 13) for f in [16.0/502, 43.0/207, 5.0/160, 12.0/135]]
 
+        corpus_builder = CorpusBuilder(['documentation'])
+        corpus_builder.corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+        corpus_builder.calc_tfidf()
+
+        assert corpus_builder.tfidf_matrix[0, 25] == 0.29297187752151427
+        assert corpus_builder.tfidf_matrix[0, 19] == 0.23098239334980156
+        assert corpus_builder.tfidf_matrix[0, 2] == 0.29297187752151427
+        assert corpus_builder.tfidf_matrix[1, 12] == 0.3877659998198718
+        assert corpus_builder.tfidf_matrix[2, 9] == 0.361536687086221
+        assert corpus_builder.tfidf_matrix[3, 17] == 0.4472135954999579
+        assert corpus_builder.tfidf_matrix[3, 4] == 0.4472135954999579
 
     def test_build_corpora(self):
         data = pd.DataFrame({
