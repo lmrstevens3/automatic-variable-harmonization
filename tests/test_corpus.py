@@ -88,14 +88,20 @@ class TestCorpusBuilder(TestCase):
         corpus_builder = CorpusBuilder(['documentation'])
         corpus_builder.corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
         corpus_builder.calc_tfidf()
+        m = np.array([[0.  , 0.  , 0.29, 0.  , 0.  , 0.23, 0.29, 0.  , 0.  , 0.  , 0.29,
+                    0.29, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.19, 0.23, 0.  , 0.  ,
+                    0.  , 0.29, 0.59, 0.29, 0.  ],
+                   [0.  , 0.  , 0.  , 0.31, 0.  , 0.  , 0.  , 0.  , 0.39, 0.  , 0.  ,
+                    0.  , 0.39, 0.  , 0.  , 0.  , 0.  , 0.  , 0.25, 0.31, 0.39, 0.39,
+                    0.39, 0.  , 0.  , 0.  , 0.  ],
+                   [0.36, 0.36, 0.  , 0.29, 0.  , 0.29, 0.  , 0.36, 0.  , 0.36, 0.  ,
+                    0.  , 0.  , 0.  , 0.  , 0.36, 0.  , 0.  , 0.23, 0.  , 0.  , 0.  ,
+                    0.  , 0.  , 0.  , 0.  , 0.36],
+                   [0.  , 0.  , 0.  , 0.  , 0.45, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  ,
+                    0.  , 0.  , 0.45, 0.45, 0.  , 0.45, 0.45, 0.  , 0.  , 0.  , 0.  ,
+                    0.  , 0.  , 0.  , 0.  , 0.  ]])
 
-        assert corpus_builder.tfidf_matrix[0, 25] == 0.29297187752151427
-        assert corpus_builder.tfidf_matrix[0, 19] == 0.23098239334980156
-        assert corpus_builder.tfidf_matrix[0, 2] == 0.29297187752151427
-        assert corpus_builder.tfidf_matrix[1, 12] == 0.3877659998198718
-        assert corpus_builder.tfidf_matrix[2, 9] == 0.361536687086221
-        assert corpus_builder.tfidf_matrix[3, 17] == 0.4472135954999579
-        assert corpus_builder.tfidf_matrix[3, 4] == 0.4472135954999579
+        assert (np.around(corpus_builder.tfidf_matrix.todense(), decimals=2) == m).all()
 
     def test_build_corpora(self):
         data = pd.DataFrame({
