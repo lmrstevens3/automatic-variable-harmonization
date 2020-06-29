@@ -72,7 +72,7 @@ class TestCorpusBuilder(TestCase):
 
         word_idxs = [tfidf_all.tf.vocabulary_[w] for w in tst_words]
         corpora_tfidfs = [calc_tfidf_single_corpus(tfidf_all, corpus) for corpus in tfidf_all.corpora]
-        dfs = {word: [1/(np.exp(tfidf.tf.idf_[tfidf.tf.vocabulary_[word]] - 1))
+        dfs = {word: [1 / (np.exp(tfidf.tf.idf_[tfidf.tf.vocabulary_[word]] - 1))
                       for tfidf in corpora_tfidfs] for word in tst_words}
         # check indicies for words in tfidf match
         assert set([tfidf.tf.vocabulary_[w] for w in tst_words for tfidf in corpora_tfidfs]) == set(word_idxs)
@@ -80,52 +80,104 @@ class TestCorpusBuilder(TestCase):
         assert sum([tfidf_all.tfidf_matrix.shape[1] == tfidf.tfidf_matrix.shape[1] for tfidf in corpora_tfidfs]) == 4
         # check idf calculations are correct result
         assert all([(np.log(n_corpora / sum(dfs[w])) + 1) for w in tst_words] == tfidf_all.tf.idf_[word_idxs])
-        assert [round(f, 13) for f in dfs['blood']] == [round(f, 13) for f in [9.0/502, 1.0/207, 4.0/160, 3.0/135]]
-        assert [round(f, 13) for f in dfs['nutrient']] == [round(f, 13) for f in [12.0/502, 2.0/207, 8.0/160, 1.0/135]]
-        assert [round(f, 13) for f in dfs['left']] == [round(f, 13) for f in [16.0/502, 55.0/207, 14.0/160, 3.0/135]]
-        assert [round(f, 13) for f in dfs['number']] == [round(f, 13) for f in [16.0/502, 43.0/207, 5.0/160, 12.0/135]]
+        assert [round(f, 13) for f in dfs['blood']] == [round(f, 13) for f in
+                                                        [9.0 / 502, 1.0 / 207, 4.0 / 160, 3.0 / 135]]
+        assert [round(f, 13) for f in dfs['nutrient']] == [round(f, 13) for f in
+                                                           [12.0 / 502, 2.0 / 207, 8.0 / 160, 1.0 / 135]]
+        assert [round(f, 13) for f in dfs['left']] == [round(f, 13) for f in
+                                                       [16.0 / 502, 55.0 / 207, 14.0 / 160, 3.0 / 135]]
+        assert [round(f, 13) for f in dfs['number']] == [round(f, 13) for f in
+                                                         [16.0 / 502, 43.0 / 207, 5.0 / 160, 12.0 / 135]]
 
         corpus_builder = CorpusBuilder(['documentation'])
-        corpus_builder.corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+        corpus_builder.corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain',
+                                             'characteristic', 'common', 'owing', 'common', 'inheritance']),
+                                   ('gender',
+                                    ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis',
+                                     'sex']),
+                                   ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based',
+                                            'gamete', 'gonad', 'individual']),
+                                   ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
         corpus_builder.calc_tfidf()
-        m = np.array([[0.  , 0.  , 0.29, 0.  , 0.  , 0.23, 0.29, 0.  , 0.  , 0.  , 0.29,
-                    0.29, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.19, 0.23, 0.  , 0.  ,
-                    0.  , 0.29, 0.59, 0.29, 0.  ],
-                   [0.  , 0.  , 0.  , 0.31, 0.  , 0.  , 0.  , 0.  , 0.39, 0.  , 0.  ,
-                    0.  , 0.39, 0.  , 0.  , 0.  , 0.  , 0.  , 0.25, 0.31, 0.39, 0.39,
-                    0.39, 0.  , 0.  , 0.  , 0.  ],
-                   [0.36, 0.36, 0.  , 0.29, 0.  , 0.29, 0.  , 0.36, 0.  , 0.36, 0.  ,
-                    0.  , 0.  , 0.  , 0.  , 0.36, 0.  , 0.  , 0.23, 0.  , 0.  , 0.  ,
-                    0.  , 0.  , 0.  , 0.  , 0.36],
-                   [0.  , 0.  , 0.  , 0.  , 0.45, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  ,
-                    0.  , 0.  , 0.45, 0.45, 0.  , 0.45, 0.45, 0.  , 0.  , 0.  , 0.  ,
-                    0.  , 0.  , 0.  , 0.  , 0.  ]])
+        m = np.array([[0., 0., 0.29, 0., 0., 0.23, 0.29, 0., 0., 0., 0.29,
+                       0.29, 0., 0., 0., 0., 0., 0., 0.19, 0.23, 0., 0.,
+                       0., 0.29, 0.59, 0.29, 0.],
+                      [0., 0., 0., 0.31, 0., 0., 0., 0., 0.39, 0., 0.,
+                       0., 0.39, 0., 0., 0., 0., 0., 0.25, 0.31, 0.39, 0.39,
+                       0.39, 0., 0., 0., 0.],
+                      [0.36, 0.36, 0., 0.29, 0., 0.29, 0., 0.36, 0., 0.36, 0.,
+                       0., 0., 0., 0., 0.36, 0., 0., 0.23, 0., 0., 0.,
+                       0., 0., 0., 0., 0.36],
+                      [0., 0., 0., 0., 0.45, 0., 0., 0., 0., 0., 0.,
+                       0., 0., 0.45, 0.45, 0., 0.45, 0.45, 0., 0., 0., 0.,
+                       0., 0., 0., 0., 0.]])
 
         assert (np.around(corpus_builder.tfidf_matrix.todense(), decimals=2) == m).all()
 
     def test_build_corpora(self):
         data = pd.DataFrame({
-            'documentation': ['race is a variable describing a group of individuals having certain characteristics in common, owing to a common inheritance.', 'gender is a variable describing the self-identified category on the basis of sex.', 'sex as a variable is descriptive of the biological characterization based on the gametes or gonads of an individual.', 'The affiliation due to shared cultural background.'],
+            'documentation': [
+                'race is a variable describing a group of individuals having certain characteristics in common, '
+                'owing to a common inheritance.',
+                'gender is a variable describing the self-identified category on the basis of sex.',
+                'sex as a variable is descriptive of the biological characterization based on the gametes or gonads '
+                'of an individual.',
+                'The affiliation due to shared cultural background.'],
             'alt documentation': ['1', '2', '1 2', '2 1'],
             'id': ['race', 'gender', 'sex', 'ethnicity']
         })
         corpus_builder = CorpusBuilder(['documentation'])
         corpus_builder.build_corpora([data], 'id')
 
-        assert corpus_builder.corpora == [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+        assert corpus_builder.corpora == [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain',
+                                                     'characteristic', 'common', 'owing', 'common', 'inheritance']), (
+                                               'gender',
+                                               ['gender', 'variable', 'describing', 'self', 'identified', 'category',
+                                                'basis', 'sex']),
+                                           ('sex', ['sex', 'variable', 'descriptive', 'biological',
+                                                    'characterization', 'based', 'gamete', 'gonad',
+                                                    'individual']),
+                                           ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
 
     def test_all_docs(self):
         corpus_builder = CorpusBuilder(['documentation'])
-        corpus_builder.corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+        corpus_builder.corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain',
+                                             'characteristic', 'common', 'owing', 'common', 'inheritance']),
+                                   ('gender',
+                                    ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis',
+                                     'sex']),
+                                   ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based',
+                                            'gamete', 'gonad', 'individual']),
+                                   ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
 
         result = corpus_builder.all_docs()
-        assert result == [['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance'], ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex'], ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual'], ['affiliation', 'due', 'shared', 'cultural', 'background']
- ]
+        assert result == [
+            ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing',
+             'common', 'inheritance'],
+            ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex'],
+            ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad',
+             'individual'], ['affiliation', 'due', 'shared', 'cultural', 'background']
+        ]
+
     def test_build_corpus(self):
         data = pd.DataFrame({
-            'documentation': ['race is a variable describing a group of individuals having certain characteristics in common, owing to a common inheritance.', 'gender is a variable describing the self-identified category on the basis of sex.', 'sex as a variable is descriptive of the biological characterization based on the gametes or gonads of an individual.', 'The affiliation due to shared cultural background.'],
+            'documentation': [
+                'race is a variable describing a group of individuals having certain characteristics in common, '
+                'owing to a common inheritance.',
+                'gender is a variable describing the self-identified category on the basis of sex.',
+                'sex as a variable is descriptive of the biological characterization based on the gametes or gonads '
+                'of an individual.',
+                'The affiliation due to shared cultural background.'],
             'alt documentation': ['1', '2', '1 2', '2 1'],
             'id': ['race', 'gender', 'sex', 'ethnicity']
         })
         result = CorpusBuilder('documentation').build_corpus(data, 'id')
-        assert result == [('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]
+        assert result == [
+            ('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic',
+                      'common', 'owing', 'common', 'inheritance']), ('gender',
+                                                                     ['gender', 'variable', 'describing', 'self',
+                                                                      'identified', 'category', 'basis', 'sex']),
+            ('sex',
+             ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete',
+              'gonad', 'individual']),
+            ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]
