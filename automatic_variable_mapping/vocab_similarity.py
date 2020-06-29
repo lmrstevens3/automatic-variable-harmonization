@@ -82,10 +82,10 @@ class VariableSimilarityCalculator:
         else:
             self.cache.append(dict(zip(self.score_cols, data)))
 
-    def finalize_cached_output(self):
-        if not self.file_name:
-            self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
-        print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
+    # def finalize_cached_output(self):
+    #     if not self.file_name:
+    #         self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
+    #     print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
     def cache_sim_scores(self, corpus, ref_id, ref_var_scores):
         # retrieve top_n pairings for reference
@@ -131,7 +131,7 @@ class VariableSimilarityCalculator:
             matched = round(matches / float(len(self.ref_ids)) * 100, 2)
             raise ValueError('There is a problem - Only matched {0}% of filtered variables'.format(matched))
 
-        self.finalize_cached_output()
+        # self.finalize_cached_output()
 
         print("Filtering matched " + str(matches) + " of " + str(len(self.ref_ids)) + " variables")
 
