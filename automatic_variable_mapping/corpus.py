@@ -2,6 +2,7 @@ from nltk import RegexpTokenizer, WordNetLemmatizer
 from nltk.corpus import stopwords
 import multiprocessing
 from functools import partial
+import tqdm
 
 from tfidf import CorporaTfidfVectorizer
 
@@ -40,7 +41,7 @@ def calc_tfidf(corpora, vocabulary=None):
     tf.fit(corpora)
     return tf.transform(corpus_all)
 
-def build_corpora(doc_col, corpora_data, id_col):
+def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
     """Using a list of dataframes, create a corpus for each dataframe in the list c
     :param id_col: column name of uniqueIDs for documents in the dataframe
     :param corpora_data: a list of dataframes containing the data to be turned into a corpus. Each dataframe in the list
@@ -49,7 +50,7 @@ def build_corpora(doc_col, corpora_data, id_col):
     Build_corpus returns a list of lists where the first item of each list contains the identifier and the
     second item contains the a list containing the processed text for each document/row in the corpus"""
 
-    return [build_corpus(doc_col, corpus_data, id_col) for corpus_data in corpora_data]
+    return [build_corpus(doc_col, corpus_data, id_col, num_cpus=num_cpus) for corpus_data in corpora_data]
 
 def all_docs(corpora):
     return [doc for corpus in corpora for _, doc in corpus]
@@ -79,7 +80,7 @@ def build_corpus(doc_col, corpus_data, id_col, num_cpus=None):
 
     if num_cpus:
         pool = multiprocessing.Pool(processes=num_cpus)
-        corpus = pool.map(partial(helper, doc_col), corpus_data[cols].as_matrix())
+        corpus = list (tqdm.tqdm(pool.imap(partial(helper, doc_col), corpus_data[cols].as_matrix()), total=corpus_data.shape[0]))
     else:
         corpus = [(row[len(doc_col)], lemmatize_variable_documentation(row[:-1])) for row in corpus_data[cols].as_matrix()]
 
