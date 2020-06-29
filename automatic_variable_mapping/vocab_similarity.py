@@ -80,7 +80,7 @@ class VariableSimilarityCalculator:
                 f.write(",".join(data))
                 f.write("\n")
         else:
-            self.cache.append(dict(zip(self.score_cols, data)))
+            self.cache = self.cache.append(dict(zip(self.score_cols, data)), ignore_index=True)
 
     # def finalize_cached_output(self):
     #     if not self.file_name:
