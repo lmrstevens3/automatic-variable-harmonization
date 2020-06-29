@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import numpy as np
 
-from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator
+from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator, calculate_similarity
 
 
 class TestVariableSimilarityCalculator(TestCase):
@@ -19,7 +19,7 @@ class TestVariableSimilarityCalculator(TestCase):
                       [0., 0., 0., 0., 0.45, 0., 0., 0., 0., 0., 0.,
                        0., 0., 0.45, 0.45, 0., 0.45, 0.45, 0., 0., 0., 0.,
                        0., 0., 0., 0., 0.]])
-        result = VariableSimilarityCalculator.calculate_similarity(m, 0)
+        result = calculate_similarity(m, 0)
         expected = [(1, 0.1188), (2, 0.1104), (3, 0)]
 
         assert result == expected
@@ -58,14 +58,13 @@ class TestVariableSimilarityCalculator(TestCase):
                        0., 0., 0.45, 0.45, 0., 0.45, 0.45, 0., 0., 0., 0.,
                        0., 0., 0., 0., 0.]])
 
-        v.init_cache()
-        v.score_variables(corpora[0], m)
+        result = v.score_variables(corpora[0], m, num_cpus=2)
 
         expected = np.array([['race', 'gender', 0.1188],
                              ['race', 'sex', 0.1104],
                              ['race', 'ethnicity', 0.0]], dtype='object')
 
-        assert (v.cache.values == expected).all()
+        assert (result.values == expected).all()
 
     def test_variable_similarity(self):
         # v = VariableSimilarityCalculator(['x'])
