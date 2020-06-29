@@ -88,28 +88,27 @@ class TestCorpusBuilder(TestCase):
 
     def test_build_corpora(self):
         data = pd.DataFrame({
-            'x': ["hello there", "how are you?", "I'm ok,", "what about yourself?"],
-            'y': ["Laura", "Laura", "Harrison", "Harrison"]
+            'documentation': ['race is a variable describing a group of individuals having certain characteristics in common, owing to a common inheritance.', 'gender is a variable describing the self-identified category on the basis of sex.', 'sex as a variable is descriptive of the biological characterization based on the gametes or gonads of an individual.', 'The affiliation due to shared cultural background.'],
+            'alt documentation': ['1', '2', '1 2', '2 1'],
+            'id': ['race', 'gender', 'sex', 'ethnicity']
         })
-        corpus_builder = CorpusBuilder(["y"])
-        corpus_builder.build_corpora([data], "x")
+        corpus_builder = CorpusBuilder(['documentation'])
+        corpus_builder.build_corpora([data], 'id')
 
-        assert corpus_builder.corpora == [[('hello there', ['laura']), ('how are you?', ['laura']), ("I'm ok,", ['harrison']), ('what about yourself?', ['harrison'])]]
+        assert corpus_builder.corpora == [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
 
     def test_all_docs(self):
-        data = pd.DataFrame({
-            'x': ["hello there", "how are you?", "I'm ok,", "what about yourself?"],
-            'y': ["Laura", "Laura", "Harrison", "Harrison"]
-        })
-        corpus_builder = CorpusBuilder(["y"])
-        corpus_builder.build_corpora([data], "x")
-        result = corpus_builder.all_docs()
-        assert result == [['laura'], ['laura'], ['harrison'], ['harrison']]
+        corpus_builder = CorpusBuilder(['documentation'])
+        corpus_builder.corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
 
+        result = corpus_builder.all_docs()
+        assert result == [['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance'], ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex'], ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual'], ['affiliation', 'due', 'shared', 'cultural', 'background']
+ ]
     def test_build_corpus(self):
         data = pd.DataFrame({
-            'x': ["hello there", "how are you?", "I'm ok,", "what about yourself?"],
-            'y': ["Laura", "Laura", "Harrison", "Harrison"]
+            'documentation': ['race is a variable describing a group of individuals having certain characteristics in common, owing to a common inheritance.', 'gender is a variable describing the self-identified category on the basis of sex.', 'sex as a variable is descriptive of the biological characterization based on the gametes or gonads of an individual.', 'The affiliation due to shared cultural background.'],
+            'alt documentation': ['1', '2', '1 2', '2 1'],
+            'id': ['race', 'gender', 'sex', 'ethnicity']
         })
-        result = CorpusBuilder("y").build_corpus(data, "x")
-        assert result == [('hello there', ['laura']), ('how are you?', ['laura']), ("I'm ok,", ['harrison']), ('what about yourself?', ['harrison'])]
+        result = CorpusBuilder('documentation').build_corpus(data, 'id')
+        assert result == [('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]
