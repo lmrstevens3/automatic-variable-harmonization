@@ -26,7 +26,7 @@ nltk.download("wordnet")
 
 class VariableSimilarityCalculator:
 
-    def __init__(self, ref_ids, pairable=None, select_scores=lambda scores: scores, score_cols=None):
+    def __init__(self, ref_ids, pairable=lambda *args: args, select_scores=lambda scores: scores, score_cols=None):
         """
 
         :param select_scores:
