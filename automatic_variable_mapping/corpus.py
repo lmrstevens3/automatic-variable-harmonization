@@ -7,7 +7,7 @@ from tfidf import CorporaTfidfVectorizer
 class CorpusBuilder:
     def __init__(self, doc_col):
 
-        self.doc_col = doc_col
+        self.doc_col = doc_col if isinstance(doc_col, list) else [doc_col]
         self.tokenizer = RegexpTokenizer(r"\w+")
         self.lemmatizer = WordNetLemmatizer()
         # self.tfidf_type =   None#tfidf_type or "single_corpus"
