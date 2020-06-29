@@ -17,7 +17,7 @@ from progressbar import ProgressBar, FormatLabel, Percentage, Bar
 # noinspection PyProtectedMember
 from sklearn.metrics.pairwise import linear_kernel
 
-from corpus import CorpusBuilder
+import corpus
 
 # Move to the script
 nltk.download('stopwords')
