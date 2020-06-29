@@ -40,13 +40,11 @@ def calculate_similarity(tfidf_matrix, ref_var_index):
     """
 
     # calculate similarity
-    similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix)
-    similarities = pd.DataFrame({'score': similarities[0], 'idx': range(0, len(similarities[0]))})
-    similarities = similarities.loc[similarities['idx'] != ref_var_index]
-    # cosine_similarities = ((i, score) for i, score in enumerate(cosine_similarities) if i != ref_var_index)
+    cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix).flatten()
+    rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
+    similar_variables = [(variable, cosine_similarities[variable]) for variable in rel_var_indices]
 
-    return [(int(i), score) for i, score in similarities.values]
-
+    return similar_variables
 
 def identity(*args):
     return args
@@ -98,11 +96,6 @@ class VariableSimilarityCalculator:
 
         # cache = init_cache_output(None, "pandas", file_name)
 
-        # matching data in filtered file
-
-        # tqdm.pandas(desc="Filtering the data")
-        # filter_data.progress_apply(lambda row: ,axis=1)
-
         corpus_doc_ids = [doc_id for doc_id, _ in c]
 
         p = multiprocessing.Pool(processes=num_cpus)
@@ -118,22 +111,9 @@ class VariableSimilarityCalculator:
                                       self.ref_ids),
                                total=len(self.ref_ids)))
 
-        result = pd.DataFrame(columns=self.score_cols)
         cache = [y for x in cache for y in x]
-        for y in cache:
-            result = result.append(y, ignore_index=True)
-        # pbar.finish()
+        result = pd.DataFrame(cache, columns=self.score_cols)
 
-        # verify that we got all the matches we expected (assumes that we should be able to
-        # match all vars in filtered data)
-
-        # if matches != len(self.ref_ids):
-        #     matched = round(matches / float(len(self.ref_ids)) * 100, 2)
-        #     raise ValueError('There is a problem - Only matched {0}% of filtered variables'.format(matched))
-
-        # self.finalize_cached_output()
-
-        # print("Filtering matched " + str(matches) + " of " + str(len(self.ref_ids)) + " variables")
         return result
 
     # def variable_similarity(self, file_name, score_name, doc_col, data, id_col):
