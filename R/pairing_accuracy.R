@@ -396,10 +396,12 @@ differences <- function(data, variablesToCompare){
 
 #################################################################################
 ################ Accuracy Main Script
-rankFile <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/output/FHS_CHS_MESA_ARIC_all_scores_ranked_ManuallyMappedConceptVars_June2020.csv'
+rankFile <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/FHS_CHS_MESA_ARIC_all_scores_ranked_manually_mapped_vars.csv'
 manualConceptVarMapFile = '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv'
 accuracyXlsxFileOut = '/Users/laurastevens/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/output/accuracy_VarMappingsBagOfWordsAllScores_June2020.xlsx'
 
+
+rankData <- fread(rankFile , header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
 
 #scores data file 
 #!!note!!- important to make sure na.strings and quotes are read in the same for files to merge correctly- files are written with NA values as "" for interoperability, and some strings have double and single quote characters
