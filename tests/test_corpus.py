@@ -93,4 +93,9 @@ class TestCorpusBuilder(TestCase):
         self.fail()
 
     def test_build_corpus(self):
-        self.fail()
+        data = pd.DataFrame({
+            'x': ["hello there", "how are you?", "I'm ok,", "what about yourself?"],
+            'y': ["Laura", "Laura", "Harrison", "Harrison"]
+        })
+        result = CorpusBuilder("y").build_corpus(data, "x")
+        assert result == [('hello there', ['laura']), ('how are you?', ['laura']), ("I'm ok,", ['harrison']), ('what about yourself?', ['harrison'])]
