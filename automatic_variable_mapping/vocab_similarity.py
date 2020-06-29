@@ -59,7 +59,7 @@ class VariableSimilarityCalculator:
 
         # calculate similarity
         similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix)
-        similarities = pd.DataFrame(data=similarities[0], columns=["idx", "score"])
+        similarities = pd.DataFrame({'score': similarities[0], 'idx': range(0, len(similarities[0]))})
         similarities = similarities.loc[similarities['idx'] != ref_var_index]
         # cosine_similarities = ((i, score) for i, score in enumerate(cosine_similarities) if i != ref_var_index)
 

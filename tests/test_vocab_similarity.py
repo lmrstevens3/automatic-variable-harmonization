@@ -1,10 +1,29 @@
 from unittest import TestCase
 
 from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator
+import numpy as np
+import scipy.sparse as sp
+import pandas as pd
 
 class TestVariableSimilarityCalculator(TestCase):
     def test_calculate_similarity(self):
-        self.fail()
+        m = np.array([[0.  , 0.  , 0.29, 0.  , 0.  , 0.23, 0.29, 0.  , 0.  , 0.  , 0.29,
+                       0.29, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.19, 0.23, 0.  , 0.  ,
+                       0.  , 0.29, 0.59, 0.29, 0.  ],
+                      [0.  , 0.  , 0.  , 0.31, 0.  , 0.  , 0.  , 0.  , 0.39, 0.  , 0.  ,
+                       0.  , 0.39, 0.  , 0.  , 0.  , 0.  , 0.  , 0.25, 0.31, 0.39, 0.39,
+                       0.39, 0.  , 0.  , 0.  , 0.  ],
+                      [0.36, 0.36, 0.  , 0.29, 0.  , 0.29, 0.  , 0.36, 0.  , 0.36, 0.  ,
+                       0.  , 0.  , 0.  , 0.  , 0.36, 0.  , 0.  , 0.23, 0.  , 0.  , 0.  ,
+                       0.  , 0.  , 0.  , 0.  , 0.36],
+                      [0.  , 0.  , 0.  , 0.  , 0.45, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  ,
+                       0.  , 0.  , 0.45, 0.45, 0.  , 0.45, 0.45, 0.  , 0.  , 0.  , 0.  ,
+                       0.  , 0.  , 0.  , 0.  , 0.  ]])
+        result = VariableSimilarityCalculator.calculate_similarity(m, 0)
+        expected = pd.DataFrame({'idx': [1, 2, 3], 'score': [0.1188, 0.1104, 0.0000]})
+
+        assert (result['idx'].values == expected['idx'].values).all()
+        assert (result['score'].values == expected['score'].values).all()
 
     def test_init_cache(self):
         self.fail()
