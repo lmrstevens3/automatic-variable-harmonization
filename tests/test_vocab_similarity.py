@@ -20,10 +20,9 @@ class TestVariableSimilarityCalculator(TestCase):
                        0.  , 0.  , 0.45, 0.45, 0.  , 0.45, 0.45, 0.  , 0.  , 0.  , 0.  ,
                        0.  , 0.  , 0.  , 0.  , 0.  ]])
         result = VariableSimilarityCalculator.calculate_similarity(m, 0)
-        expected = pd.DataFrame({'idx': [1, 2, 3], 'score': [0.1188, 0.1104, 0.0000]})
+        expected = [(1, 0.1188), (2, 0.1104), (3, 0)]
 
-        assert (result['idx'].values == expected['idx'].values).all()
-        assert (result['score'].values == expected['score'].values).all()
+        assert result == expected
 
     def test_init_cache(self):
         self.fail()
