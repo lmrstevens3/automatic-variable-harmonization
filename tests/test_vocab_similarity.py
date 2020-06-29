@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import numpy as np
 
-from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator, calculate_similarity
+from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator, calculate_similarity, filter_scores, identity
 
 
 class TestVariableSimilarityCalculator(TestCase):
@@ -76,7 +76,7 @@ class TestVariableSimilarityCalculator(TestCase):
 
         scores = [(1, 0.1188), (2, 0.1104), (3, 0)]
 
-        result = list(v.filter_scores(scores, 'x'))
+        result = list(filter_scores([], identity, scores, 'x'))
 
         assert result == scores
 
