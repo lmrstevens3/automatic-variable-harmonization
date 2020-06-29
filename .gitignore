@@ -1,6 +1,13 @@
+
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
 
-/Filtering_rank_data_bash_examples
+
+/venv2/
+/venv/
+/output/
+/.idea/
+*.pyc
+
