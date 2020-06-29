@@ -19,6 +19,7 @@ from sklearn.metrics.pairwise import linear_kernel
 
 import multiprocessing
 from functools import partial
+import tqdm
 
 # Move to the script
 nltk.download('stopwords')
@@ -102,17 +103,20 @@ class VariableSimilarityCalculator:
         # tqdm.pandas(desc="Filtering the data")
         # filter_data.progress_apply(lambda row: ,axis=1)
 
-        widgets = [Percentage(), Bar(), FormatLabel("(elapsed: %(elapsed)s)")]
-        pbar = ProgressBar(widgets=widgets, maxval=len(self.ref_ids))
-        matches = 0
-
         corpus_doc_ids = [doc_id for doc_id, _ in c]
 
-        pool = multiprocessing.Pool(processes=num_cpus)
+        p = multiprocessing.Pool(processes=num_cpus)
 
-        cache = pool.map(partial(helper, self.score_cols, self.ref_ids, self.pairable, self.select_scores,
-                                 corpus_doc_ids, matches, tfidf, c),
-                         self.ref_ids)
+        cache = list(tqdm.tqdm(p.imap(partial(helper,
+                                                self.score_cols,
+                                                self.ref_ids,
+                                                self.pairable,
+                                                self.select_scores,
+                                                corpus_doc_ids,
+                                                tfidf,
+                                                c),
+                                      self.ref_ids),
+                               total=len(self.ref_ids)))
 
         result = pd.DataFrame(columns=self.score_cols)
         cache = [y for x in cache for y in x]
@@ -129,7 +133,7 @@ class VariableSimilarityCalculator:
 
         # self.finalize_cached_output()
 
-        print("Filtering matched " + str(matches) + " of " + str(len(self.ref_ids)) + " variables")
+        # print("Filtering matched " + str(matches) + " of " + str(len(self.ref_ids)) + " variables")
         return result
 
     # def variable_similarity(self, file_name, score_name, doc_col, data, id_col):
@@ -170,12 +174,11 @@ def filter_scores(ref_ids, pairable, ref_var_scores, ref_id):
             if pairable(score, pair_id, ref_ids, ref_id))
 
 
-def helper(score_cols, ref_ids, pairable, select_scores, corpus_doc_ids, matches, tfidf, c, ref_id):
+def helper(score_cols, ref_ids, pairable, select_scores, corpus_doc_ids, tfidf, c, ref_id):
     ref_id = str(ref_id)
     # get index of filter data in corpus
     corpus_ref_idx = corpus_doc_ids.index(ref_id)
     if corpus_ref_idx >= 0:
-        matches += 1
         ref_var_scores = calculate_similarity(tfidf, corpus_ref_idx)
         ref_var_scores = select_scores(ref_var_scores)
         ref_var_scores = filter_scores(ref_ids, pairable, ref_var_scores, ref_id)
