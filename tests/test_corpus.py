@@ -3,12 +3,12 @@ from unittest import TestCase
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from corpus import CorpusBuilder
+from automatic_variable_mapping.corpus import CorpusBuilder
 
 import pandas as pd
 import numpy as np
 
-from vocab_similarity import partition
+from automatic_variable_mapping.vocab_similarity import partition
 
 
 class TestCorpusBuilder(TestCase):
@@ -18,7 +18,7 @@ class TestCorpusBuilder(TestCase):
 
     def test_calc_tfidf(self):
         print(os.getcwd())
-        file_path = "test_vocab_similarity_data.csv"
+        file_path = "tests/test_vocab_similarity_data.csv"
 
         # Read in test data and sample for test
         data = pd.read_csv(file_path, sep=",", quotechar='"', na_values="", low_memory=False)
@@ -49,7 +49,7 @@ class TestCorpusBuilder(TestCase):
         assert (corpus_builder.tfidf_matrix.nnz != check_tfidf.nnz) == 0
 
     def test_calc_tfidf_multi_corpus(self):
-        file_path = "test_vocab_similarity_data.csv"
+        file_path = "tests/test_vocab_similarity_data.csv"
         # Read in test data
         data = pd.read_csv(file_path, sep=",", quotechar='"', na_values="", low_memory=False)
         data.var_desc_1 = data.var_desc_1.fillna("")
