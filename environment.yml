@@ -6,8 +6,6 @@ dependencies:
   - nltk
   - numpy
   - python=2.7
-  - nose
   - pandas
   - progressbar
 prefix: /home/harrisonpl/.conda/envs/avm2
-
