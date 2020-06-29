@@ -115,7 +115,7 @@ class VariableSimilarityCalculator:
             ref_id = str(ref_id)
             # get index of filter data in corpus
             corpus_ref_idx = corpus_doc_ids.index(ref_id)
-            if corpus_ref_idx:
+            if corpus_ref_idx >= 0:
                 matches += 1
                 ref_var_scores = self.calculate_similarity(tfidf, corpus_ref_idx)
                 ref_var_scores = self.select_scores(ref_var_scores)
