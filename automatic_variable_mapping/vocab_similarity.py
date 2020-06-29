@@ -63,7 +63,7 @@ class VariableSimilarityCalculator:
         similarities = similarities.loc[similarities['idx'] != ref_var_index]
         # cosine_similarities = ((i, score) for i, score in enumerate(cosine_similarities) if i != ref_var_index)
 
-        return similarities
+        return [(int(i), score) for i, score in similarities.values]
 
     def init_cache(self, file_name=None):
         self.file_name = file_name
