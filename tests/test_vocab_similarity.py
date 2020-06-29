@@ -1,5 +1,6 @@
 from unittest import TestCase
 
+from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator
 
 class TestVariableSimilarityCalculator(TestCase):
     def test_calculate_similarity(self):
@@ -24,7 +25,9 @@ class TestVariableSimilarityCalculator(TestCase):
         self.fail()
 
     def test_filter_scores(self):
-        self.fail()
+        v = VariableSimilarityCalculator(['x'])
+        result = v.filter_scores([('x', 10)], 'x')
+        assert result == [('x', 10)]
 
 
 class Test(TestCase):
