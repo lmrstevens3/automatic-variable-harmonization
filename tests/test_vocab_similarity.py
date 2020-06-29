@@ -1,24 +1,24 @@
 from unittest import TestCase
 
-from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator
 import numpy as np
-import scipy.sparse as sp
-import pandas as pd
+
+from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator
+
 
 class TestVariableSimilarityCalculator(TestCase):
     def test_calculate_similarity(self):
-        m = np.array([[0.  , 0.  , 0.29, 0.  , 0.  , 0.23, 0.29, 0.  , 0.  , 0.  , 0.29,
-                       0.29, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.19, 0.23, 0.  , 0.  ,
-                       0.  , 0.29, 0.59, 0.29, 0.  ],
-                      [0.  , 0.  , 0.  , 0.31, 0.  , 0.  , 0.  , 0.  , 0.39, 0.  , 0.  ,
-                       0.  , 0.39, 0.  , 0.  , 0.  , 0.  , 0.  , 0.25, 0.31, 0.39, 0.39,
-                       0.39, 0.  , 0.  , 0.  , 0.  ],
-                      [0.36, 0.36, 0.  , 0.29, 0.  , 0.29, 0.  , 0.36, 0.  , 0.36, 0.  ,
-                       0.  , 0.  , 0.  , 0.  , 0.36, 0.  , 0.  , 0.23, 0.  , 0.  , 0.  ,
-                       0.  , 0.  , 0.  , 0.  , 0.36],
-                      [0.  , 0.  , 0.  , 0.  , 0.45, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  ,
-                       0.  , 0.  , 0.45, 0.45, 0.  , 0.45, 0.45, 0.  , 0.  , 0.  , 0.  ,
-                       0.  , 0.  , 0.  , 0.  , 0.  ]])
+        m = np.array([[0., 0., 0.29, 0., 0., 0.23, 0.29, 0., 0., 0., 0.29,
+                       0.29, 0., 0., 0., 0., 0., 0., 0.19, 0.23, 0., 0.,
+                       0., 0.29, 0.59, 0.29, 0.],
+                      [0., 0., 0., 0.31, 0., 0., 0., 0., 0.39, 0., 0.,
+                       0., 0.39, 0., 0., 0., 0., 0., 0.25, 0.31, 0.39, 0.39,
+                       0.39, 0., 0., 0., 0.],
+                      [0.36, 0.36, 0., 0.29, 0., 0.29, 0., 0.36, 0., 0.36, 0.,
+                       0., 0., 0., 0., 0.36, 0., 0., 0.23, 0., 0., 0.,
+                       0., 0., 0., 0., 0.36],
+                      [0., 0., 0., 0., 0.45, 0., 0., 0., 0., 0., 0.,
+                       0., 0., 0.45, 0.45, 0., 0.45, 0.45, 0., 0., 0., 0.,
+                       0., 0., 0., 0., 0.]])
         result = VariableSimilarityCalculator.calculate_similarity(m, 0)
         expected = [(1, 0.1188), (2, 0.1104), (3, 0)]
 
@@ -38,20 +38,25 @@ class TestVariableSimilarityCalculator(TestCase):
 
     def test_score_variables(self):
         v = VariableSimilarityCalculator(['race'])
-        corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance']), ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']), ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad', 'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
-        corpus_doc_ids = [doc_id for doc_id, _ in corpora[0]]
-        m = np.array([[0.  , 0.  , 0.29, 0.  , 0.  , 0.23, 0.29, 0.  , 0.  , 0.  , 0.29,
-                       0.29, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  , 0.19, 0.23, 0.  , 0.  ,
-                       0.  , 0.29, 0.59, 0.29, 0.  ],
-                      [0.  , 0.  , 0.  , 0.31, 0.  , 0.  , 0.  , 0.  , 0.39, 0.  , 0.  ,
-                       0.  , 0.39, 0.  , 0.  , 0.  , 0.  , 0.  , 0.25, 0.31, 0.39, 0.39,
-                       0.39, 0.  , 0.  , 0.  , 0.  ],
-                      [0.36, 0.36, 0.  , 0.29, 0.  , 0.29, 0.  , 0.36, 0.  , 0.36, 0.  ,
-                       0.  , 0.  , 0.  , 0.  , 0.36, 0.  , 0.  , 0.23, 0.  , 0.  , 0.  ,
-                       0.  , 0.  , 0.  , 0.  , 0.36],
-                      [0.  , 0.  , 0.  , 0.  , 0.45, 0.  , 0.  , 0.  , 0.  , 0.  , 0.  ,
-                       0.  , 0.  , 0.45, 0.45, 0.  , 0.45, 0.45, 0.  , 0.  , 0.  , 0.  ,
-                       0.  , 0.  , 0.  , 0.  , 0.  ]])
+        corpora = [
+            [('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common',
+                       'owing', 'common', 'inheritance']),
+             ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']),
+             ('sex',
+              ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad',
+               'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+        m = np.array([[0., 0., 0.29, 0., 0., 0.23, 0.29, 0., 0., 0., 0.29,
+                       0.29, 0., 0., 0., 0., 0., 0., 0.19, 0.23, 0., 0.,
+                       0., 0.29, 0.59, 0.29, 0.],
+                      [0., 0., 0., 0.31, 0., 0., 0., 0., 0.39, 0., 0.,
+                       0., 0.39, 0., 0., 0., 0., 0., 0.25, 0.31, 0.39, 0.39,
+                       0.39, 0., 0., 0., 0.],
+                      [0.36, 0.36, 0., 0.29, 0., 0.29, 0., 0.36, 0., 0.36, 0.,
+                       0., 0., 0., 0., 0.36, 0., 0., 0.23, 0., 0., 0.,
+                       0., 0., 0., 0., 0.36],
+                      [0., 0., 0., 0., 0.45, 0., 0., 0., 0., 0., 0.,
+                       0., 0., 0.45, 0.45, 0., 0.45, 0.45, 0., 0., 0., 0.,
+                       0., 0., 0., 0., 0.]])
 
         v.init_cache()
         v.score_variables(corpora[0], m)
@@ -63,6 +68,8 @@ class TestVariableSimilarityCalculator(TestCase):
         assert (v.cache.values == expected).all()
 
     def test_variable_similarity(self):
+        # v = VariableSimilarityCalculator(['x'])
+        # v.variable_similarity()
         self.fail()
 
     def test_filter_scores(self):
