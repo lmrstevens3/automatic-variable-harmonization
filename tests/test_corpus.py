@@ -87,7 +87,14 @@ class TestCorpusBuilder(TestCase):
 
 
     def test_build_corpora(self):
-        self.fail()
+        data = pd.DataFrame({
+            'x': ["hello there", "how are you?", "I'm ok,", "what about yourself?"],
+            'y': ["Laura", "Laura", "Harrison", "Harrison"]
+        })
+        corpus_builder = CorpusBuilder(["y"])
+        corpus_builder.build_corpora([data], "x")
+
+        assert corpus_builder.corpora == [[('hello there', ['laura']), ('how are you?', ['laura']), ("I'm ok,", ['harrison']), ('what about yourself?', ['harrison'])]]
 
     def test_all_docs(self):
         self.fail()
