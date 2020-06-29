@@ -6,6 +6,11 @@ dependencies:
   - nltk
   - numpy
   - python=2.7
+  - nose
   - pandas
   - progressbar
+  - jupyter
+  - backports.functools_lru_cache
+  - tqdm
 prefix: /home/harrisonpl/.conda/envs/avm2
+
