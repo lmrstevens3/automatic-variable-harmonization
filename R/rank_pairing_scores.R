@@ -1,22 +1,4 @@
 library(dplyr)
-scoresFile <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/output/FHS_CHS_MESA_ARIC_all_similarity_scores_and_combined_scores_ManuallyMappedConceptVars_Mar2020.csv'
-rankFileOut <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/output/FHS_CHS_MESA_ARIC_all_scores_ranked_ManuallyMappedConceptVars_June2020.csv'
-manualConceptVarMapFile = '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv'
-
-
-
-{if (parallel = T) {
-    #partition for parallel processing and set parallel parameters
-    set_default_cluster(makeCluster(cores))
-    multidplyr::partition(., !!as.name(class_col))
-} else {
-    group_by(!!as.name(class_col))
-}} %>% mutate(correct_match = !!as.name(paired_ID_col) %in% !!as.name(ref_ID_col)) %>%
-{if(parallel = T) {
-    multidplyr::collect(.)
-    on.exit(stopCluster(cluster)) #stop parallel processing
-} else {.}} 
-
 
 rank_scores <- function(data, score_col, ref_ID_col, rank_by_col = NULL){
     #' sorts data by score_col (descending) and dense ranks pairings with highest similarity scores. 
@@ -28,26 +10,55 @@ rank_scores <- function(data, score_col, ref_ID_col, rank_by_col = NULL){
     #' @rank_by_col: A grouping variable that defines if ranking 1:n should be done by group instead of for all pairings for a given ref ID. 
     #' For example, if scores for a ref come from multiple sources, the column listing the scores source could be supplied, 
     #' and ref ID would be ranked 1:n scores for each source instead of 1:n scores in all sources
-    rankData <- data %>% group_by(!!as.name(ref_ID_col), !!as.name(rank_by_col)) %>% 
+    rankData <- data %>% group_by_at(c(ref_ID_col, rank_by_col), add = T) %>% 
         arrange(desc(!!as.name(score_col)), .by_group = T)  %>% 
         mutate(!!as.symbol(paste0("rank_",score_col)) := dense_rank(desc(!!as.name(score_col)))) %>% 
         mutate_at(paste0("rank_",score_col), funs(replace(., !!as.name(score_col) == 0, NA))) %>% 
-        group_by(ref_ID_col) %>% 
+        group_by(!!as.name(ref_ID_col)) %>% 
         mutate(!!as.symbol(paste0(score_col, "_ranked_n")) := sum(!is.na(!!as.name(paste0("rank_",score_col)))))
     
     rankData <- rankData %>% dplyr::select(grep(paste0(score_col,"$"), colnames(.), invert = T), matches(score_col,"$"))
     return(rankData)
 }
 
-addRankColsForEachScore <- function(data, score_variables, ref_ID_col, pairable_col = NULL){
-    #wrapper function to call calculate Ranks and append a set of rank cols for multiple pairing scores
+
+calc_ranks_all_scores <- function(data, score_variables, ref_ID_col, rank_by_col = NULL, parallel = F, cores = (detectCores() - 2)){
+    #wrapper function to parallelize or append a set of rank cols for multiple pairing scores
+    if (parallel) {
+        set_default_cluster(makeCluster(cores))
+        data <- data %>% multidplyr::partition(., !!as.name(ref_ID_col))
+    }
     for(i in score_variables) {
         print(paste0("calculating ", i, " ranks"))
-        data <- rank_scores(data, i, ...)
+        data <- rank_scores(data, i, ref_ID_col, rank_by_col)
+    }
+    if(parallel) {
+        data <- data %>% multidplyr::collect(.)
+        on.exit(stopCluster(cluster)) 
     }
     return(data)
 }
+
 mannual_map_ref_data <- fread(manualConceptVarMapFile, header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
+
+#Join scores data and concept data and filter out datasets not in goldstandard and concepts with broad definitions that don't map across variables/studies (ex. cholesterol lowering med because not same medication for mappings)
+#takes about 3-4 min with 21267777 X 41 and 1703 X 21
+allScoresData  <- allScoresData %>% #dplyr::left_join((conceptMappedVarsData %>% select(-data_desc_1, -detailedTimeIntervalDbGaP_1, -var_coding_labels_1))) %>% 
+    filter(!concept %in% c("Cholesterol Lowering Medication")) #%>% group_by(concept) %>% filter(dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1)
+
+#"unique Participant Identifier" (could also remove if desired)
+#check join worked correctly
+unique(allScoresData$concept) #50 concepts, 0.99 GB, 2367346 X 49 after merge and filter (#51 concepts, 9218935 X 49, 4.2 GB if use PID concept) (#concepts Time To CVDDeath and Time To CHDDeath filtered out because they are only present in mesa)
+object.size(allScoresRankData )
+
+#create correct match variable for accuracy and 
+timestamp() #started 4:35pm
+score_cols <- c(grep("score_",colnames(allScoresData), value = T))
+rankData <- addRankColsForEachScore(allScoresData, score_cols, ref_ID_col = "dbGaP_studyID_datasetID_varID_1", rank_by_col = "dbGaP_studyID_datasetID_2")
+timestamp()
+
+
+
 
 cores <- detectCores() - 2 # macbook pro can split 4 cores into 8 cores for parallel procesing
 myfunc  <- function(data) {

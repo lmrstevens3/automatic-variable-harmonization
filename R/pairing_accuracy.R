@@ -53,18 +53,18 @@ assign_correct_pairings <- function(data, ref_ID_col, paired_ID_col, class_col =
     #' @param class_col: the grouping variable that defines which set of paired IDs should be compared to the ref ID.
     #' 
     #' @returns: data with appended boolean column called 'correct_pairing'.
-    cat("starting correct match assignment")
-    print(timestamp())
+    print("starting correct match assignment")
+    timestamp()
     system.time({
         data <- data %>% 
-        {if (parallel = T) {
+        {if (parallel) {
             #partition for parallel processing and set parallel parameters
             set_default_cluster(makeCluster(cores))
             multidplyr::partition(., !!as.name(class_col))
-        } else {
-            group_by_at(!!as.name(class_col))
-        }} %>% mutate(correct_pairing = !!as.name(paired_ID_col) %in% !!as.name(ref_ID_col)) %>%
-        {if(parallel = T) {
+        } else {.}} 
+        %>% group_by_at(., vars(class_col)) %>% 
+            mutate(correct_pairing = !!as.name(paired_ID_col) %in% !!as.name(ref_ID_col)) %>%
+        {if(parallel) {
             multidplyr::collect(.)
             on.exit(stopCluster(cluster)) #stop parallel processing
         } else {.}} 
@@ -99,14 +99,14 @@ calc_true_pairings_n <- function(data, ref_ID_col, class_col = NULL, ref_multipl
     #' @returns: data with appended columns: unique ref ID count (<ref_ID_col>_n) and total actual pairings (true_pairings_n). 
     #' If ref_multiple_group_col is supplied, unique ref_multiple_group_col count (<ref_ID_col>_n_ref_multiple_group_col) is also appended
     #' If class_col is supplied, data contains counts by class 
-    try(if(length(ref_multiple_group_col) == 0 & multiple_correction == T) stop("multiple_group_col required if multiple_correction = T"))
+    try(if(length(ref_multiple_group_col) == 0 & multiple_correction) stop("multiple_group_col required if multiple_correction = T"))
     if(!length(ref_multiple_group_col) == 0) {ref_in_mult  <- paste0(paste0(class_col, ref_ID_col, collapse = "_"), '_in_', ref_multiple_group_col)}
     data <-  data %>% group_by_at(class_col) %>%
         mutate_at(c(ref_ID_col, ref_multiple_group_col), funs("n" = n_unique(.))) %>%
         {if(!length(ref_multiple_group_col) == 0) {
             group_by_at(c(class_col, ref_multiple_group_col)) %>% 
                 mutate(!!as.symbol(ref_in_mult) := n_unique(ref_ID_col)) %>% group_by_at(class_col) %>%
-            {if(multiple_correction == T) {
+            {if(multiple_correction) {
                 mutate(true_pairings_n = clac_n_pairings(!!as.name(ref_ID_col),!!as.name(ref_multiple_group_col)))
             } else {
                 mutate(true_pairings_n = clac_n_pairings(!!as.name(ref_ID_col)) - sum(!!as.name(ref_in_mult)-1))
@@ -147,22 +147,19 @@ calc_positive_predictions <- function(data, rank_col, ref_ID_col, paired_ID_col,
     #' 
     #' @returns: data appended with columns topX_pred_pos, topX_true_pos for each x in pairing_rank_cutoffs.
     
-    try(if(length(multiple_group_col) == 0 & multiple_correction == T) stop("multiple_group_col required if multiple_correction = T"))
-    cutoffs <- set_names(pairing_rank_cutoffs, paste0('top', pairing_rank_cutoffs, "_pred_pos", sep = ""))
+    try(if(length(paired_multiple_group_col) == 0 & multiple_correction) stop("multiple_group_col required if multiple_correction = T"))
+    cutoffs <- setNames(pairing_rank_cutoffs, paste0('top', pairing_rank_cutoffs, "_pred_pos", sep = ""))
     
     #for data within a group, get the  number of predictions and true positives for each rank cut off in pairing_rankCutOffs vector
     data  <-  data %>% group_by(!!as.name(ref_ID_col)) %>% 
         split(group_indices(.)) %>% #applies the calcPosPredictAllCut function to each group (ref_ID)
-        purrr::map_df(calc_pos_predict_all_cut, cutoffs, rank_col, paired_ID_col, correct_pairing) %>%
-        {if(multiple_correction = T) {
-            group_by(!!as.name(paired_multiple_group_col), add = T) %>%
-            mutate_at(matches("_true_pos"), sum(unique(.), na.rm = T)/length(data[[paired_ID_col]]))
+        purrr::map_df(calc_pos_predict_all_cut, cutoffs, rank_col, paired_ID_col, correct_pairings_col) %>%
+        {if(multiple_correction) {
+            group_by(., !!as.name(paired_multiple_group_col), add = T) %>%
+            mutate_at(matches("_true_pos"), sum(unique(.), na.rm = T)/length(!!as.name(paired_ID_col)))
         } else {mutate_at(matches("_true_pos"), sum(unique(.), na.rm = T))}} %>% 
-        ungroup()
-    data  <- calc_positive_predictions(data, rank_col, ...) %>% 
         dplyr::select(c(ref_ID_col, class_col, ref_multiple_group_col, matches("_n$|_pred_pos|true_pos"))) %>% 
         unique()
-    return(data)    
    return(data)
 }
 
@@ -233,23 +230,23 @@ calc_positive_predictions <- function(data, rank_col, ref_ID_col, paired_ID_col,
 #                                     }, grp_data = .x, name = names(prt)))
 #     }, name = names(pr.t)) %>% tidyr::unnest(.sep="")
 #  
-iris %>%
-    do(purrr::invoke_map_dfc(list(purrr::map_df),
-                      list(#list(select(., c("Species")), unique),
-                      list(select(., c(matches("(?:Width|Length)"))), sum,  na.rm = T)
-                      )
-))
-                                                     
-
-
-
-grdc <- getRankData(rankData, pairing_rankCutOffs = c(1,5,10), score_col = score_col)
-oldColNames <- grep("score_desc$", colnames(rankData2), value = T)
-names(oldColNames) <- gsub(".predMatches", "predMade", gsub("numRankedMatches", "numPairingsRanked", oldColNames))
-rd2 <- rankData2 %>% select(grep(paste0("_score_"), colnames(.), invert = T), oldColNames)#matches(score_col,"$")) %>% rename(oldColNames)
-all.equal(rd2, grdc)
-grdc %>% filter(dbGaP_studyID_datasetID_varID_1 %in% rd2$dbGaP_studyID_datasetID_varID_1[c(2192058, 2191679, 359659, 359607, 359602, 79416)]) %>% select(concept, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2, varID_2, numPairingsRanked_score_desc)
-
+# iris %>%
+#     do(purrr::invoke_map_dfc(list(purrr::map_df),
+#                       list(#list(select(., c("Species")), unique),
+#                       list(select(., c(matches("(?:Width|Length)"))), sum,  na.rm = T)
+#                       )
+# ))
+#                                                      
+# 
+# 
+# 
+# grdc <- getRankData(rankData, pairing_rankCutOffs = c(1,5,10), score_col = score_col)
+# oldColNames <- grep("score_desc$", colnames(rankData2), value = T)
+# names(oldColNames) <- gsub(".predMatches", "predMade", gsub("numRankedMatches", "numPairingsRanked", oldColNames))
+# rd2 <- rankData2 %>% select(grep(paste0("_score_"), colnames(.), invert = T), oldColNames)#matches(score_col,"$")) %>% rename(oldColNames)
+# all.equal(rd2, grdc)
+# grdc %>% filter(dbGaP_studyID_datasetID_varID_1 %in% rd2$dbGaP_studyID_datasetID_varID_1[c(2192058, 2191679, 359659, 359607, 359602, 79416)]) %>% select(concept, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2, varID_2, numPairingsRanked_score_desc)
+# 
 
 
 calc_precision <- function(data, truePositives, predictedPositives){
@@ -299,7 +296,7 @@ calc_accuracy <- function(data, rank_col, ref_ID_col, paired_ID_col, correct_pai
     #' F1, precision, recall 
     
     #calculate number of true positives, positive predictions, and true_pairings
-    data <- calc_positive_predictions(...)
+    data <- calc_positive_predictions(data, rank_col, ref_ID_col, paired_ID_col, correct_pairings_col, pairing_rank_cutoffs, paired_multiple_group_col, multiple_correction)
     data <- calc_true_pairings_n(data, ref_ID_col, class_col, ref_multiple_group_col, multiple_correction) %>% 
         dplyr::select(-c(paste0(ref_ID_col, '_n', ref_multiple_group_col)))
     unique_cols <- c(paste0(c(ref_ID_col, ref_multiple_group_col), "_n"), "true_pairings_n")
@@ -327,7 +324,6 @@ calc_accuracy <- function(data, rank_col, ref_ID_col, paired_ID_col, correct_pai
         } else {.}} %>% mutate_at(vars(matches("_F1")), funs(replace(.,is.na(.), 0)))
     return(data)
 }
-
 
 
 
@@ -421,9 +417,16 @@ unique(allScoresRankData $concept) #50 concepts, 0.99 GB, 2367346 X 49 after mer
 object.size(allScoresRankData )
 
 #create correct match variable for accuracy and 
-timestamp() #started 4:35pm
-rankData <- assignCorrectPairings(allScoresRankData) 
-timestamp()
+rankData <- assign_correct_pairings(rankData, ref_ID_col = "dbGaP_studyID_datasetID_varID_1", paired_ID_col = "dbGaP_studyID_datasetID_varID_2", class_col =  "concept", parallel = F, cores = NULL)
+accuracyData <- 
+
+
+accuracyTotals <- sapply(score_cols, function(x) {
+    print(paste0("calculating ", x, " accuracy")) 
+    calc_accuracy(rankData, rank_col = paste0("rank_", x), ref_ID_col = "dbGaP_studyID_datasetID_varID_1", paired_ID_col = "dbGaP_studyID_datasetID_varID_2", correct_pairings_col = "correct_pairing", pairing_rank_cutoffs = c(1,5,10), paired_multiple_group_col = "dbGaP_studyID_datasetID_2", multiple_correction = T, class_col = "concept", ref_multiple_group_col = "dbGaP_studyID_datasetID_1") 
+    }, USE.NAMES = T, simplify = F)
+
+
 #rm(allScoresData) #remove all scores data so its not taking up memory
 
 cores <- detectCores() - 2 # macbook pro can split 4 cores into 8 cores for parallel procesing
@@ -450,7 +453,7 @@ TPboolVars <- set_names(paste0('top', pairing_rankCutOffs, "TP_1varPair"),
 F1parameters <- c(f1vars_1varPair, f1vars_1var1dataset)
 c(starts_with("total"), "numPairingsRanked",  matches("top\\d+posPred")))
 timestamp()
-accuracyTotals <- sapply(possibleScores, function(x){print(paste0("calculating ", x, " accuracy")); accuracyTotals(rankData2, x)}, USE.NAMES = T, simplify = F)
+accuracyTotals <- sapply(possibleScores, function(x){print(paste0("calculating ", x, " accuracy")); accuracyTotals(rankData, x)}, USE.NAMES = T, simplify = F)
 accuracyTotals[["overallAccuracyAllScores"]] <- do.call(rbind, accuracyTotals) %>% filter(concept == "All Concepts") %>% dplyr::mutate(score = names(accuracyTotals)) %>% 
     dplyr::select(score, totalVarsMatched, totalPossibleMatches, totalPossibleMatches_1var1dataset, numPairingsRanked, ends_with(".TP"), ends_with(".TP_1var1dataset"), ends_with(".precision"), ends_with(".recall"), ends_with("recall_1var1dataset"), ends_with("F1"), ends_with("F1_1var1dataset"))
 timestamp()
