@@ -11,3 +11,5 @@
 /.idea/
 *.pyc
 
+.DS_Store
+
