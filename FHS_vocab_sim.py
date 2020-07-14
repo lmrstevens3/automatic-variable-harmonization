@@ -14,7 +14,7 @@ import multiprocessing
 # In[2]:
 
 
-ref_id_col = 'dbGaP_studyID_datasetID_1'
+ref_id_col = 'dbGaP_studyID_datasetID_varID_1'
 doc_col = 'var_desc_1'
 # doc_col = list("var_desc_1”, “units_1, “var_coding_counts_distribution_1)
 data_file = "tests/FHS_CHS_ARIC_MESA_varDoc_dbGaP_NLP.csv"
