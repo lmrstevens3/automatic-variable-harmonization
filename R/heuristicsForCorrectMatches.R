@@ -101,10 +101,82 @@ summary_rankData <- summarise_(total_pairs = n(),
                categorical_pairs = sum(!(ref_var_continous & paired_var_continous))) 
                
                
-    
+
+#check when concatenating is helpful
+system.time({
+    scores_info <- rank_data %>% filter(correctMatchTrue) %>% 
+        mutate_at(c("rank_score_descCodeLabUnits", "rank_score_descUnits", "rank_score_descCodeLab"), funs("better" = . < rank_score_desc)) %>% 
+        mutate(euc_better = rank_score_codeLab_euclidean < rank_score_codeLab_relativeDist, 
+               noisy_euc_better = rank_score_desc_SqNoisyOr_codeLabEuclidean < rank_score_desc_SqNoisyOr_codeLabRelativeDistance, 
+               max_better_rel = rank_score_desc_SqNoisyOr_codeLabEuclidean < rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean, 
+               max_better_euc = rank_score_desc_SqNoisyOr_codeLabRelativeDistance < rank_score_desc_SqNoisyOr_maxOtherMeta_relDist) %>% 
+        mutate_at(c("score_codeLab_relativeDist", "score_codeLab_euclidean", "score_desc", "score_units"), funs("0_1" = replace(., !(. == 0 | . == 1), "(0,1)" ))) %>%
+        mutate(ref_var_continuous = grepl('(?:max|min|mean|median|sd)[ ]*=[ ]*(?:\\d|.\\d)*;+', var_coding_counts_distribution_1), 
+               paired_var_continuous = grepl('(?:max|min|mean|median|sd)[ ]*=[ ]*(?:\\d|.\\d)*;+', var_coding_counts_distribution_2)) %>%
+        mutate(pairing_data_type = rowSums(select(.,"ref_var_continuous", "paired_var_continuous")),
+               pairing_data_type = plyr::mapvalues(pairing_data_type, c(0,1,2), c("categorical", "categorical_continous", "continous"))) %>%
+        rowwise() %>%
+        mutate(doc_na = paste0(c(c("units1", "code1")[c(is.na(units_1), grepl('(nulls[ ]*=\\d+[; ]*$|[ ]*(?:max|min|mean|median|sd)[ ]*=[ -]*(?:\\d|.\\d)*;+)', var_coding_counts_distribution_1))],
+                                 c("units2", "code2")[c(is.na(units_2), grepl('(nulls[ ]*=\\d+[; ]*$|[ ]*(?:max|min|mean|median|sd)[ ]*=[ -]*(?:\\d|.\\d)*;+)', var_coding_counts_distribution_2))]), "", collapse = "_"), 
+               score_0 = paste0(c(c("desc", "euc", "rel", "units")[c(is.na(rank_score_desc), is.na(rank_score_codeLab_euclidean), is.na(rank_score_codeLab_relativeDist), is.na(rank_score_units))]),"", collapse = "_"),
+               score_1 = paste0(c(c("desc", "euc", "rel", "units")[c(score_desc == 1, score_codeLab_euclidean == 1, score_codeLab_relativeDist == 1, score_units == 1)]),"", collapse = "_"))
+})
+#look at concat  
+table(scores_info %>% select(c("rank_score_descUnits_better", "rank_score_descCodeLab_better", "rank_score_descCodeLabUnits_better")))
+table(scores_info$rank_score_descCodeLabUnits_better)
+table(scores_info$rank_score_descUnits_better, useNA = "ifany")
+table(scores_info$rank_score_descCodeLab_better)
+table(scores_info$rank_score_descCodeLabUnits_better, scores_info$rank_score_descUnits_better, useNA = "ifany")
+table(scores_info$rank_score_descCodeLabUnits_better, scores_info$rank_score_descCodeLab_better, useNA = "ifany")
+table(scores_info[scores_info$doc_na == "", "rank_score_descCodeLab_better"], useNA = "ifany")
+table(scores_info[scores_info$doc_na == "", "rank_score_descCodeLabUnits_better"], useNA = "ifany")
 
 
-#
+
+#look at units present
+table(is.na((rank_data %>% select(units_1, units_2))))
+table(is.na((scores_info %>% select(units_1, units_2))))
+
+#look at euc vs. rel 
+table(scores_info %>% filter(!rank_score_codeLab_euclidean == rank_score_codeLab_relativeDist) %>% select(euc_better), useNA = "ifany")
+table(scores_info %>% filter(!rank_score_codeLab_euclidean == rank_score_codeLab_relativeDist) %>% 
+          mutate(euc_1 = score_codeLab_euclidean == 1) %>% 
+          select(euc_1), useNA = "ifany")
+#euc range is much less granular than rel_dist range when ranks are not equal (3% of pairs) (similar otherwise)
+summary(scores_info %>% filter(!rank_score_codeLab_euclidean == rank_score_codeLab_relativeDist) %>% 
+            select( var_coding_counts_distribution_1, var_coding_counts_distribution_2, score_codeLab_euclidean, score_codeLab_relativeDist,dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_varID_2))
+#look at euc vs. rel 
+scores_info %>% filter((!euc_better) & (!rank_score_codeLab_euclidean == rank_score_codeLab_relativeDist) & 
+                           conceptID %in% c("alcoholIntake", "avgSBP", "heartRate", "coffee"))  %>% 
+    group_by(dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2) %>% 
+    mutate_at(c('rank_score_codeLab_euclidean', 'rank_score_codeLab_relativeDist'), funs("max" = max(., na.rm = T))) %>% 
+    ungroup() %>% mutate(dist_rank_diff =  rank_score_codeLab_euclidean - rank_score_codeLab_relativeDist) %>% 
+    select(dist_rank_diff, concept, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2)
+
+#look at continous vs categorical 
+table(scores_info$score_relativeDistance > 0, scores_info$score_euclidianDistanceScaled > 0, scores_info$score_codeLab > 0)
+
+#look at units distribution and times when units between 0,1 actually help
+
+#look at max vs code/dist
+table(scores_info %>% filter(!rank_score_desc_SqNoisyOr_maxOtherMeta_relDist == rank_score_desc_SqNoisyOr_codeLabRelativeDistance) %>% select(max_better_rel), useNA = "ifany")
+table(scores_info %>% filter(!rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean == rank_score_descUnits_SqNoisyOr_codeLabEuclidean) %>% select(max_better_euc), useNA = "ifany")
+
+
+#look at num of time 0,1 dist/codelab or desc scores cause combined score to lower rank
+table(scores_info %>% filter(!rank_score_desc_SqNoisyOr_codeLabRelativeDistance == rank_score_descUnits_SqNoisyOr_codeLabEuclidean) %>% select(noisy_euc_better), useNA = "ifany")
+table(scores_info %>% filter(!rank_score_desc_SqNoisyOr_codeLabRelativeDistance == rank_score_descUnits_SqNoisyOr_codeLabEuclidean) %>% select(noisy_euc_better, rank_score_codeLab_relativeDist_0_1, rank_score_codeLab_euclidean_0_1), useNA = "ifany") 
+summary(scores_info %>% filter(!rank_score_desc_SqNoisyOr_codeLabRelativeDistance == rank_score_descUnits_SqNoisyOr_codeLabEuclidean) %>% 
+            select(score_codeLab_euclidean, score_codeLab_relativeDist))
+
+
+table(scores_info %>% filter(rank_score_desc < rank_score_desc_SqNoisyOr_codeLabRelativeDistance |rank_score_desc < rank_score_desc_SqNoisyOr_codeLabEuclidean) %>% select(score_0))
+
+table(scores_info %>% filter(rank_score_desc < rank_score_desc_SqNoisyOr_codeLabRelativeDistance | rank_score_desc < rank_score_desc_SqNoisyOr_codeLabEuclidean) %>% select(score_1))
+
+
+
+
 
 #test creating correctMatchTrue Variable
 dbp_t <- rankData %>% filter(conceptID == "DBP") %>% left_join(conceptMappedVarsData)
