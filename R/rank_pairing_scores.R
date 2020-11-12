@@ -49,9 +49,17 @@ calc_ranks_all_scores <- function(data, score_variables, ref_ID_col, rank_by_col
 
 ##DO ALL SCORE MERGING AND CONCEPT CHECKING PRIOR TO RANKING
 mannual_map_ref_file = '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv'
+
 scores_file <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/output/all_similarity_scores_manually_mapped_vars_FHS_CHS_MESA_ARIC.csv'
+rank_output_file <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/FHS_CHS_MESA_ARIC_all_scores_ranked_manually_mapped_vars.csv'
+
+
 #all_similarity_and_combined_scores_manually_mapped_vars_FHS_CHS_MESA_ARIC.csv
 mannual_map_ref_data <- fread(mannual_map_ref_file, header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
+mannual_map_ref_data <- mannual_map_ref_data %>% group_by(concept) %>% 
+    filter(!length(dbGaP_studyID_datasetID_varID_1) == 1) %>%
+    rename("var_docID_1" = varDocID_1) 
+
 scores_data <- fread(scores_file, header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
 
 #scores_data <- scores_data %>% select("var_docID_1" = metadataID_1, "var_docID_2" = metadataID_2, 
@@ -61,27 +69,26 @@ dim(scores_data)
 colnames(scores_data)
 #Join scores data and concept data and filter out datasets not in goldstandard and concepts with broad definitions that don't map across variables/studies (ex. cholesterol lowering med because not same medication for mappings)
 #takes about 3-4 min with 21267777 X 41 and 1703 X 23
-scores_data <- dplyr::left_join(scores_data, (mannual_map_ref_data %>% select(concept, "var_docID_1" = varDocID_1, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_1)) %>% 
-    filter(!concept %in% c("Cholesterol Lowering Medication"))) %>% 
-    group_by(concept) %>% filter(dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1) 
+scores_data <- dplyr::full_join(scores_data, mannual_map_ref_data %>% select(concept, var_docID_1, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_1)) %>% 
+    filter(!concept %in% c("Cholesterol Lowering Medication")) %>%
+    group_by(concept) %>% filter(dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1 | is.na(dbGaP_studyID_datasetID_varID_2)) 
 
 #need to decide how to handle vars that get filtered because no pairs with score > 0 
-scores_data2 <- scores_data %>% full_join(mannual_map_ref_data %>% filter(!concept %in% c("Cholesterol Lowering Medication")) %>% select(concept, dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_1))
-
+gsub('([a-z])\\B([A-Z])', '\\1_\\L\\2', gsub('odeLab', 'odelab', colnames(scores_data)[-c(1:6)]), perl=T)
 #"unique Participant Identifier" (could also remove if desired)
 #check join worked correctly
 unique(scores_data$concept) #50 concepts, 0.99 GB, 2367346 rows after merge and filter (#51 concepts, 9218935 rows, 4.2 GB if use PID concept) (#concepts Time To CVDDeath and Time To CHDDeath filtered out because they are only present in mesa)
 dim(scores_data)
 #check vars that are in ref data but not in scores (either not scored, score of 0 or purposefully removed)
-mannual_map_ref_data %>% filter(!dbGaP_studyID_datasetID_varID_1 %in% unique(scores_data2$dbGaP_studyID_datasetID_varID_1),
+mannual_map_ref_data %>% filter(!dbGaP_studyID_datasetID_varID_1 %in% unique(scores_data$dbGaP_studyID_datasetID_varID_1),
                                 !concept %in% c("Cholesterol Lowering Medication")) %>% 
     select(concept, study_1, dbGaP_dataset_label_1, dbGaP_studyID_datasetID_varID_1, var_desc_1)
 
 #calculate ranks
-score_cols <- c(grep("score_",colnames(scores_data), value = T))
+score_cols <- c(grep("^score_",colnames(scores_data), value = T))
 rank_data <- calc_ranks_all_scores(scores_data, score_cols, ref_ID_col = "dbGaP_studyID_datasetID_varID_1", rank_by_col = "dbGaP_studyID_datasetID_2")
 
-rank_output_file <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/FHS_CHS_MESA_ARIC_all_scores_ranked_manually_mapped_vars.csv'
+
 fwrite(rank_data, rank_output_file, sep = ',', qmethod = 'double', na = "", row.names = F)
 
 

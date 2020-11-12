@@ -16,7 +16,8 @@ test_meta1 <- extract_metadata(pdf_file)
 str(test_meta1)
 
 test_meta1 <- extract_metadata(pdf_file)
-str(test_meta1)
+str(test_meta1
+
 #for data dictionaires column headers should include all below with Format/Informat missing sometimes 
 #Num
 #Variable
