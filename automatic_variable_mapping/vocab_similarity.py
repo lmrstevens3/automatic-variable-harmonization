@@ -1,13 +1,13 @@
 ##########################################################################################
 # vocab_similarity.py
-# author: TJ Callahan, Laura Stevens
+# author: TJ Callahan, Laura Stevens, Harrison Pielke-Lombardo
 # Purpose: script reads in a csv files of variable documentation including some or all of
 #           descriptions, units, as well as coding labels and pairs all variables against all other
 #           variables (except against themselves) and scores variable similarity in an attempt to
 #          identify which variables, using the documentation, are the most similar.
 # version 1.1.1
 # python version: 2.7.13
-# date: 06.01.2020
+# date: 07.20.2020
 ##########################################################################################
 
 # read in needed libraries

@@ -1,4 +1,3 @@
-#library(plyr)
 library(data.table)
 library(dplyr)
 library(purrr)
@@ -6,31 +5,7 @@ library(tidyr)
 library(parallel)
 library(multidplyr)
 library(xlsx)
-library(docs)
-library(DT)
-library(plotly)
-library(processx)
 
-# c("CHD", "AF", "race_ethnicity",  "age", "diabetes", "SBP", "DBP")
-# rankData %>% filter(conceptID %in% c("CHD"), rank_score_desc == 1) %>% dplyr::select(concept, dbGaP_studyID_datasetID_varID_1, varID_1, dbGaP_studyID_datasetID_2, varID_2, correctMatchTrue, rank_score_desc, top1.predMatches_score_desc) 
-# t2 <- t %>% group_by(concept) %>% filter(dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1) %>% mutate(pred = length(dbGaP_studyID_datasetID_varID_2))
-# t %>% group_by(concept) %>% filter(dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1) %>% group_by(dbGaP_studyID_datasetID_varID_1) %>% mutate(pred = length(dbGaP_studyID_datasetID_varID_2[which(rank_score_desc == 1)]))
-# #234 matches for CHD concept including datasets not in gold standard
-# t <-rankData %>% filter(conceptID == "CHD", rank_score_desc == 1) #%>% dplyr::select(concept, dbGaP_studyID_datasetID_varID_1, varID_1, dbGaP_studyID_datasetID_2, varID_2, correctMatchTrue, rank_score_desc, topPredMatches_score_desc, dbGaP_studyID_datasetID_1, dbGaP_studyID_datasetID_varID_2) 
-# chkRanksMade <- rankData2 %>% select(concept, dbGaP_studyID_datasetID_1, varID_1, dbGaP_studyID_datasetID_2, varID_2, rank_score_desc, rank_score_units, rank_score_desc_SqNoisyOr_maxOtherMeta_euclidean, dbGaP_studyID_datasetID_1, dbGaP_studyID_datasetID_varID_2, dbGaP_studyID_datasetID_varID_1)
-# #getting how top.predMatches is caclucated
-# t2 <-t %>% group_by(dbGaP_studyID_datasetID_varID_1, dbGaP_studyID_datasetID_2) %>% mutate(numVarsInMatchedDataset = length(dbGaP_studyID_datasetID_2)) %>%
-#     group_by(dbGaP_studyID_datasetID_varID_1) %>% mutate(top1.pred  = sum(topPredMatches_score_desc/numVarsInMatchedDataset)) %>% select(-rank_score_desc)
-# 
-# rankData %>% group_by(concept) %>% filter(conceptID == "CHD", rank_score_desc == 1, dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1) %>% 
-#     mutate(datasetsInConcept = length(unique(dbGaP_studyID_datasetID_2))) %>% 
-#     dplyr::select(conceptID, reference_variable, matched_variable,  ends_with("Dataset"), ends_with("Matches"), correctMatchTrue, rank_score_desc, datasetsInConcept) 
-
-#check combined sores are correct- check codelab >0 and  score_euc  == 0, check noisy or for something 
-#calculate toppredmatches_1var_dataset by #5,10,1*(numVarsInConcept)(numD-1)
-#use t and check topPredmatches by variable for rankData
-#then check race/age/stroke/marital_status
-#then run all
 
 is_correct_pair <- function(paired_ID_col, correctPairings, sep = "; "){
     #' Helper function to determine if variable id is in a string of id's separated by semi_colon. 
@@ -42,7 +17,7 @@ is_correct_pair <- function(paired_ID_col, correctPairings, sep = "; "){
 }
 
 
-assign_correct_pairings <- function(data, ref_ID_col, paired_ID_col, class_col =  NULL, parallel = T, cores = (detectCores() - 2)) {
+assign_true_pairing <- function(data, ref_ID_col, paired_ID_col, class_cols =  NULL, parallel = T, cores = (detectCores() - 2)) {
     #' Evaluates if a pairing is correct in a dataframe of pairings and appends a boolean column called 'correct_pairing' to the data frame. 
     #' Option to parallelize for large dataframes. Uses a group_var to define which set of paired_ID's should be considered correct. 
     #' The function isCorrect above can be called for correct_match, a list of paired_IDs are provided in form of a concatenated string (requires  rowwise grouping and is much slower).
@@ -60,10 +35,10 @@ assign_correct_pairings <- function(data, ref_ID_col, paired_ID_col, class_col =
         {if (parallel) {
             #partition for parallel processing and set parallel parameters
             set_default_cluster(makeCluster(cores))
-            multidplyr::partition(., !!as.name(class_col))
-        } else {.}} 
-        %>% group_by_at(., vars(class_col)) %>% 
-            mutate(correct_pairing = !!as.name(paired_ID_col) %in% !!as.name(ref_ID_col)) %>%
+            multidplyr::partition(., !!as.name(class_cols))
+        } else {.}} %>%
+            group_by_at(., vars(class_cols)) %>% 
+            mutate(true_pairing = !!as.name(paired_ID_col) %in% !!as.name(ref_ID_col)) %>%
         {if(parallel) {
             multidplyr::collect(.)
             on.exit(stopCluster(cluster)) #stop parallel processing
@@ -75,15 +50,18 @@ assign_correct_pairings <- function(data, ref_ID_col, paired_ID_col, class_col =
 
 
 n_unique <- function(x){
+    #' Calculate the number of unique values of x (size of the set)
     return(length(unique(x)))
 }
 
 clac_n_pairings <- function(x, y = NULL){
+    #' Calculates the possible combinations of x not including x paired with itself (x*x-1).
+    #' If y provided calculates the possible combinations of x and y, assuming x can not pair with the y it is associated with (x*y-1).
     if(length(y) == 0){y = x}
     return((n_unique(x)*(n_unique(y)- 1)))
 }
 
-calc_true_pairings_n <- function(data, ref_ID_col, class_col = NULL, ref_multiple_group_col = NULL, multiple_correction = F) {
+calc_n_true_positives <- function(data, ref_ID_col, class_col = NULL, ref_group_col = NULL, multiple_correction = F) {
     #' Calculates the total number of actual pairings for the ref IDs in ref_ID_col and does not count ref ID paired with itself.
     #' If a calss is provided, only ref ID pairings within a class are counted and not pairings between classes. 
     #' If a pairable col is provided, ref ID with the same value in pairable_col are not counted. 
@@ -99,41 +77,46 @@ calc_true_pairings_n <- function(data, ref_ID_col, class_col = NULL, ref_multipl
     #' @returns: data with appended columns: unique ref ID count (<ref_ID_col>_n) and total actual pairings (true_pairings_n). 
     #' If ref_multiple_group_col is supplied, unique ref_multiple_group_col count (<ref_ID_col>_n_ref_multiple_group_col) is also appended
     #' If class_col is supplied, data contains counts by class 
-    try(if(length(ref_multiple_group_col) == 0 & multiple_correction) stop("multiple_group_col required if multiple_correction = T"))
-    if(!length(ref_multiple_group_col) == 0) {ref_in_mult  <- paste0(paste0(class_col, ref_ID_col, collapse = "_"), '_in_', ref_multiple_group_col)}
+    if(multiple_correction & length(ref_group_col) == 0) stop("ref_group_col required if multiple_correction = T")
+    if(!length(ref_group_col) == 0) {ref_in_mult  <- paste0(paste0(class_col, ref_ID_col, collapse = "_"), '_in_', ref_group_col)}
     data <-  data %>% group_by_at(class_col) %>%
-        mutate_at(c(ref_ID_col, ref_multiple_group_col), funs("n" = n_unique(.))) %>%
-        {if(!length(ref_multiple_group_col) == 0) {
-            group_by_at(c(class_col, ref_multiple_group_col)) %>% 
+        mutate_at(c(ref_ID_col, ref_group_col), funs("n" = n_unique(.))) %>%
+        {if(!length(ref_group_col) == 0) {
+            group_by_at(c(class_col, ref_group_col)) %>% 
                 mutate(!!as.symbol(ref_in_mult) := n_unique(ref_ID_col)) %>% group_by_at(class_col) %>%
             {if(multiple_correction) {
-                mutate(true_pairings_n = clac_n_pairings(!!as.name(ref_ID_col),!!as.name(ref_multiple_group_col)))
+                mutate(true_pairing_n = clac_n_pairings(!!as.name(ref_ID_col),!!as.name(ref_group_col)))
             } else {
-                mutate(true_pairings_n = clac_n_pairings(!!as.name(ref_ID_col)) - sum(!!as.name(ref_in_mult)-1))
+                mutate(true_pairing_n = clac_n_pairings(!!as.name(ref_ID_col)) - sum(!!as.name(ref_in_mult)-1))
             }}
         } else {
-            mutate(true_pairings_n = clac_n_pairings(!!as.name(ref_ID_col)))               
+            mutate(true_pairing_n = clac_n_pairings(!!as.name(ref_ID_col)))               
         }} %>% ungroup () %>%
     return(data)
 }
 
 
 calc_pos_predict_for_cut <- function(cutoff, data, rank_col, paired_ID_col) {
+    #' calculates the number of predictions (ranked pairs) below a certain rank
     length(data[[paired_ID_col]][which(data[[rank_col]] <= cutoff)])
 }
 
-calc_correct_pair_for_cut <- function(cutoff, data, rank_col, correct_pairing) {
-    !(is.na(data[[rank_col]]) && data[[rank_col]] >= cutoff && (!data[[correct_pairing]]))
+calc_true_pred_for_cut <- function(cutoff, data, rank_col, true_pred_col) {
+    
+    #' returns true/false for values that are true positives & below a certain rank
+    !(is.na(data[[rank_col]]) && data[[rank_col]] >= cutoff && (!data[[true_pred_col]]))
 }
 
-calc_pos_predict_all_cut <- function(data, cutoffs, rank_col, paired_ID_col, correct_pairing) {
+calc_pos_predict_all_cut <- function(data, cutoffs, rank_col, paired_ID_col, true_pred_col) {
+    #' calculates the positive of predictions (ranked pairs) and true predictions below a certain rank for all cut offs
     cutoffs_tp <- setNames(cutoffs, gsub('_pred_', '_true_', names(cutoffs)))
-    dplyr::mutate(data, !!!purrr::imap(cutoffs, function(cutoff, name) name = calc_pos_predict_for_cut(cutoff, data, rank_col, paired_ID_col))) %>% 
-    dplyr::mutate(!!!purrr::imap(cutoffs_tp, function(cutoff, name) name = calc_correct_pair_for_cut(cutoff, data, rank_col, correct_pairing)))
+    #if(!length(.pb) == 0) setTxtProgressBar(.pb, .pb$up(value = (.pb$getVal() + 1)))
+    data %>% dplyr::mutate(!!!purrr::imap(cutoffs, function(cutoff, name) name = calc_pos_predict_for_cut(cutoff, data, rank_col, paired_ID_col))) %>% 
+        dplyr::mutate(!!!purrr::imap(cutoffs_tp, function(cutoff, name) name = calc_true_pred_for_cut(cutoff, data, rank_col, true_pred_col))) 
 }
 
 
-calc_positive_predictions <- function(data, rank_col, ref_ID_col, paired_ID_col, correct_pairings_col, pairing_rank_cutoffs = c(1,5,10), paired_multiple_group_col = NULL, multiple_correction = F) {
+calc_n_positive_predictions <- function(data, rank_col, ref_ID_col, paired_ID_col, true_pairing_col, rank_cutoffs = c(1,5,10), multiple_correction = F, paired_group_col = NULL) {
     #' calculates the number positive predictions made and true positives for each reference ID (number of pairings with a similarity score > 0). 
     #' 
     #' @param data: data frame of pairings with a column of ranks. 
@@ -146,24 +129,20 @@ calc_positive_predictions <- function(data, rank_col, ref_ID_col, paired_ID_col,
     #' When TRUE, multiple true positive pairings from ref ID x, paired with ref IDs y1:yn, where y1:yn all have the same multiple_group_col value are counted as one true positive.
     #' 
     #' @returns: data appended with columns topX_pred_pos, topX_true_pos for each x in pairing_rank_cutoffs.
+    if(multiple_correction & length(paired_group_col) == 0) stop("paired_group_col required if multiple_correction = T")
+    cutoffs <- setNames(rank_cutoffs, paste0('top', rank_cutoffs, "_pred_pos", sep = ""))
     
-    try(if(length(paired_multiple_group_col) == 0 & multiple_correction) stop("multiple_group_col required if multiple_correction = T"))
-    cutoffs <- setNames(pairing_rank_cutoffs, paste0('top', pairing_rank_cutoffs, "_pred_pos", sep = ""))
-    
-    #for data within a group, get the  number of predictions and true positives for each rank cut off in pairing_rankCutOffs vector
+    #get the number of predictions and true positives for each rank cut off in rank_cutoffs
     data  <-  data %>% group_by(!!as.name(ref_ID_col)) %>% 
-        split(group_indices(.)) %>% #applies the calcPosPredictAllCut function to each group (ref_ID)
-        purrr::map_df(calc_pos_predict_all_cut, cutoffs, rank_col, paired_ID_col, correct_pairings_col) %>%
+        split(group_indices(.)) %>% #applies calc_pos_predict_all_cut to each group (ref_ID)
+        purrr::map_df(calc_pos_predict_all_cut, rank_cutoffs, rank_col, paired_ID_col, true_pairing_col, .pb) %>%
         {if(multiple_correction) {
-            group_by(., !!as.name(paired_multiple_group_col), add = T) %>%
-            mutate_at(matches("_true_pos"), sum(unique(.), na.rm = T)/length(!!as.name(paired_ID_col)))
-        } else {mutate_at(matches("_true_pos"), sum(unique(.), na.rm = T))}} %>% 
-        dplyr::select(c(ref_ID_col, class_col, ref_multiple_group_col, matches("_n$|_pred_pos|true_pos"))) %>% 
-        unique()
+            group_by(., !!as.name(paired_group_col), add = T) %>%
+            dplyr::mutate_at(vars(matches("_true_pos")), sum(unique(.), na.rm = T)/length(!!as.name(paired_ID_col)))
+        } else {dplyr::mutate_at(., vars(matches("_true_pos")), sum(unique(.), na.rm = T))}} %>% 
+        dplyr::select(c(ref_ID_col, class_col, matches("_n$|_pred_pos|true_pos"))) %>% unique()
    return(data)
 }
-
-
 
 
 # varname <- paste("petal", n , sep=".")
@@ -177,10 +156,17 @@ calc_positive_predictions <- function(data, rank_col, ref_ID_col, paired_ID_col,
 # 
 # avrc <- set_names(c(1,5,10), paste0('top', c(1,5,10), "TP", sep = ""))
 # 
+#pb <- txtProgressBar(min = 0, max = n_unique(mtcars$cyl), style = 3) 
+#pb2 <- progress_estimated(n_unique(mtcars$cyl), 0)
+#mtcars %>% group_by(cyl) %>% 
+#     split(group_indices(.)) %>% #applies the predMadeInGroupForRankCutOffs function to each group (reference variable (study_1.dataset_1.varID))
+#     purrr::map_df(calc_pos_predict_all_cut, cuts, rank_col = "wt", paired_ID_col = "cyl", true_pred_col = "mpg", .pb = pb)
 
-# mtcars %>% group_by(cyl) %>%
-#      split(group_indices(.)) %>% #applies the predMadeInGroupForRankCutOffs function to each group (reference variable (study_1.dataset_1.varID))
-#      purrr::map_df(calc_pos_predict_all_cut, cuts, rank_col = "wt", paired_ID_col = "cyl", correct_pairing = "mpg")
+#pb <- progress_estimated(100)
+#for (i in 1:3) {
+#    setTxtProgressBar(pb, pb$up(pb$getVal() + 1))
+#}
+
 # # 
 # applyForAllRankCutOffs <- function(.x, namedVarParameterList, ){}
 # 
@@ -249,66 +235,72 @@ calc_positive_predictions <- function(data, rank_col, ref_ID_col, paired_ID_col,
 # 
 
 
-calc_precision <- function(data, truePositives, predictedPositives){
-    precision = data[[truePositives]]/data[[predictedPositives]]
+calc_precision <- function(data, true_positives, predicted_positives){
+    #' calculates precision
+    precision = data[[true_positives]]/data[[predicted_positives]]
     return(precision)
 }
 
-calc_recall <- function(data, truePositives, actualPositives){
-    recall = data[[truePositives]]/data[[actualPositives]]
+calc_recall <- function(data, true_positives, actual_positives){
+    #' calculates recall
+    recall = data[[true_positives]]/data[[actual_positives]]
     return(recall)
 }
 
-calc_F1 <- function(data, truePositives, predictedPositives, actualPositives){
-    precision <- precision(data, truePositives, predictedPositives)
-    recall <- precision(data, truePositives, actualPositives)
+calc_F1 <- function(data, true_positives, predicted_positives, actual_positives){
+    #' calculates precision, recall, F1
+    precision <- precision(data, true_positives, predicted_positives)
+    recall <- precision(data, true_positives, actual_positives)
     F1 <- (2*precision*recall)/(precision+recall)
     F1stats <- tibble("precision" = precision, "recall" = recall, "F1" = F1)
     return(F1stats)
 }
 
 calc_F1_precision_recall_all <- function(F1params, name, data){
+    #' calculates precision, recall, F1 for each case defined in F1params
     dplyr::mutate(data, !!!map(F1params, function(F1params, name) name = list(do.call("calc_F1", args = F1params))))
 } 
 
-calc_accuracy <- function(data, rank_col, ref_ID_col, paired_ID_col, correct_pairings_col, pairing_rank_cutoffs = c(1,5,10), paired_multiple_group_col = NULL, multiple_correction = F, class_col = NULL, ref_multiple_group_col = NULL) {
+calc_accuracy <- function(data, rank_col, ref_ID_col, paired_ID_col, true_pairing_col, rank_cutoffs = c(1,5,10), multiple_correction = F, paired_group_col = NULL,  class_col = NULL, ref_group_col = NULL) {
     #' calculates positive predicitions, true positives, accuracy (precision, recall, F1) for each class in data. 
     #' 
     #' @param data: dataframe of pairings with a column of similarity scores used to rank pairings
     #' @param rank_col: column name of similarity score ranks in data
     #' @param paired_ID_col: the column data that contains pairing IDs
     #' @param ref_ID_col: the column in data that contains ref ID's
-    #' @param correct_pairings_col: logical column in data indicating if a pairing is correct or not
+    #' @param true_pairing_col: logical column in data indicating if a pairing is correct or not
     #' @param pairing_rankCutOffs a vector of rank cut off values when calculating positive predictions.
     #' @param class_col: a grouping variable that defines sets of pairable ref IDs when calculating total acutal pairings and accuracy
-    #' @param ref_multiple_group_col: a grouping variable that defines ref_IDs belonging to the same group. 
-    #' @param paired_multiple_group_col: a grouping variable that defines paired_IDs belonging to the same group. 
-    #' @param multiple_correction: logical value indicating if multiple_correction should be made for multiple ref ID in the same ref_multiple_group_col group, and 
+    #' @param ref_group_col: a grouping variable that defines ref_IDs belonging to the same group. 
+    #' @param paired_group_col: a grouping variable that defines paired_IDs belonging to the same group. 
+    #' @param multiple_correction: logical value indicating if multiple_correction should be made for multiple ref ID in the same ref_group_col group, and 
     #' multiple paired_ID in the same group paired to a ref ID. When TRUE, pairings from ref ID x, paired with paired IDs y1:yn, where y1:yn 
-    #' all have the same paired_multiple_group_col value are counted as a single pairing and if any pairings in the set of x,y1:yn are correct, it is counted as one true positive.
+    #' all have the same paired_group_col value are counted as a single pairing and if any pairings in the set of x,y1:yn are correct, it is counted as one true positive.
     #' 
     #' @returns: a dataframe with the stats listed below. If class col provided, stats are also calculated by class
     #' with first row of the dataframe is overall accuracy for all classes
     #' dataframe includes counts (n) for: 
-    #' refID and ref_multiple_group_col/class_col (if provided), 
+    #' refID and ref_group_col/class_col (if provided), 
     #' true pairings, true positives, and positive predictions 
     #' parings ranked (only included if column ending in "ranked_n" is included in data passed in- this column is calculated if rank_scores() in rank_pairing_scores file is used to rank data), 
     #' F1, precision, recall 
     
+    #set progress bar
+    #pb <- txtProgressBar(min = 0, max = n_unique(data[[ref_ID_col]]) + 1 + n_unique(data[[class_col]]), style = 3) 
+    
     #calculate number of true positives, positive predictions, and true_pairings
-    data <- calc_positive_predictions(data, rank_col, ref_ID_col, paired_ID_col, correct_pairings_col, pairing_rank_cutoffs, paired_multiple_group_col, multiple_correction)
-    data <- calc_true_pairings_n(data, ref_ID_col, class_col, ref_multiple_group_col, multiple_correction) %>% 
-        dplyr::select(-c(paste0(ref_ID_col, '_n', ref_multiple_group_col)))
-    unique_cols <- c(paste0(c(ref_ID_col, ref_multiple_group_col), "_n"), "true_pairings_n")
+    data <- calc_n_positive_predictions(data, rank_col, ref_ID_col, paired_ID_col, true_pairing_col, rank_cutoffs, multiple_correction, paired_group_col)
+    data <- calc_n_true_positives(data, ref_ID_col, class_col, ref_group_col, multiple_correction) 
+    unique_cols <- c(paste0(c(ref_ID_col, ref_group_col), "_n"), "true_pairing_n")
     #match true positives, positive predictions, and true_pairings to F1 parameters for all rank cut offs
     params_F1 <- sapply(paste0('top', c(1,5,10)), function(x){
-        setNames(as.list(c(as.name("data"), c(paste0(x, c("_true_pos", "_pred_pos")), "true_pairings_n"))), 
-                 c("data", "truePositives", "predictedPositives", "actualPositives"))
+        setNames(as.list(c(as.name("data"), c(paste0(x, c("_true_pos", "_pred_pos")), "true_pairing_n"))), 
+                 c("data", "true_positives", "predicted_positives", "actual_positives"))
     }, simplify = F, USE.NAMES = T)
     
     #calculate accuracy stats
-    data <- data %>% group_by_at(!!as.name(class_col)) %>% 
-        #get counts (n) (by class if class_col provided): refID/ref_multiple_group_col (if provided), true pairings, parings ranked, true positives, and positive predictions 
+    data <- data %>% group_by_at(class_col) %>% 
+        #get counts (n) (by class if class_col provided): refID, ref_group_col (if provided), true pairings, parings ranked, true positives, and positive predictions 
         do(invoke_map_dfc(list(map_df), 
                           list(list(select(., c(unique_cols, unique))), 
                                list(select(., c(matches("_ranked_n|_true_pos|_pred_pos)"))), sum,  na.rm = T))
@@ -322,6 +314,7 @@ calc_accuracy <- function(data, rank_col, ref_ID_col, paired_ID_col, correct_pai
                           purrr::map_df(calc_F1_precision_recall_all(params_F1, name, .)) %>% tidyr::unnest(.sep="_") %>%
                           mutate(concept = paste("All Concepts ", "N = ", length(unique(.[[class_col]])))))                    
         } else {.}} %>% mutate_at(vars(matches("_F1")), funs(replace(.,is.na(.), 0)))
+    #if(!length(pb) == 0) setTxtProgressBar(pb, pb$up(pb$getVal() + 1))
     return(data)
 }
 
@@ -389,47 +382,41 @@ differences <- function(data, variablesToCompare){
     return(data)
 }
 
-
 #################################################################################
 ################ Accuracy Main Script
-manualConceptVarMapFile = '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv'
-rankFile <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/FHS_CHS_MESA_ARIC_all_scores_ranked_manually_mapped_vars.csv'
-accuracyXlsxFileOut = '/Users/laurastevens/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/output/accuracy_VarMappingsBagOfWordsAllScores_June2020.xlsx'
+rank_data_file <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/FHS_CHS_MESA_ARIC_all_scores_ranked_manually_mapped_vars.csv'
+accuracy_output_file = '/Users/laurastevens/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/output/accuracy_VarMappingsBagOfWordsAllScores_June2020.xlsx'
 
-
-rankData <- fread(rankFile , header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
-
-#scores data file 
-#!!note!!- important to make sure na.strings and quotes are read in the same for files to merge correctly- files are written with NA values as "" for interoperability, and some strings have double and single quote characters
-allScoresRankData <- fread(scoresFile , header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
-#mannually mapped concepts and possible matches
-conceptMappedVarsData <- fread(manualConceptVarMapFile, header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
-tbl_df(conceptMappedVarsData) %>% dplyr::select(conceptID, study_1, dbGaP_dataset_label_1, varID_1, var_desc_1, totalVarsInConcept, totalDatasetsInConcept, ends_with("Dataset"), ends_with("Matches"))
-
-#Join scores data and concept data and filter out datasets not in goldstandard and concepts with broad definitions that don't map across variables/studies (ex. cholesterol lowering med because not same medication for mappings)
-#takes about 3-4 min with 21267777 X 41 and 1703 X 21
-allScoresRankData  <- allScoresRankData  %>% dplyr::left_join((conceptMappedVarsData %>% select(-data_desc_1, -detailedTimeIntervalDbGaP_1, -var_coding_labels_1))) %>% 
-    filter(!concept %in% c("Cholesterol Lowering Medication")) %>% group_by(concept) %>% filter(dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1)
-
-#"unique Participant Identifier" (could also remove if desired)
-#check join worked correctly
-unique(allScoresRankData $concept) #50 concepts, 0.99 GB, 2367346 X 49 after merge and filter (#51 concepts, 9218935 X 49, 4.2 GB if use PID concept) (#concepts Time To CVDDeath and Time To CHDDeath filtered out because they are only present in mesa)
-object.size(allScoresRankData )
+rank_data <- fread(rank_data_file , header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
+rank_data_test <- rank_data %>% select(-(matches("^top\\d"))) %>% rename()
 
 #create correct match variable for accuracy and 
-rankData <- assign_correct_pairings(rankData, ref_ID_col = "dbGaP_studyID_datasetID_varID_1", paired_ID_col = "dbGaP_studyID_datasetID_varID_2", class_col =  "concept", parallel = F, cores = NULL)
-accuracyData <- 
+rank_data <-  assign_true_pairing(rank_data, ref_ID_col = "dbGaP_studyID_datasetID_varID_1", paired_ID_col = "dbGaP_studyID_datasetID_varID_2", class_cols =  "concept", parallel = F, cores = NULL)
+
+
+#test new accuracy functions
+rank_data_pred <- calc_n_positive_predictions(rank_data, rank_col = paste0("rank_", "score_desc"), ref_ID_col = "dbGaP_studyID_datasetID_varID_1", paired_ID_col = "dbGaP_studyID_datasetID_varID_2", true_pairing_col = "true_pairing", rank_cutoffs = c(1,5,10), multiple_correction = T, paired_group_col = "dbGaP_studyID_datasetID_2")
+data <- calc_n_true_positives(rank_data, ref_ID_col = "dbGaP_studyID_datasetID_varID_1",class_col = "concept", ref_group_col = "dbGaP_studyID_datasetID_1", multiple_correction = T) 
+
+accuracy_desc <- calc_accuracy(rank_data, rank_col = paste0("rank_", "score_desc"), ref_ID_col = "dbGaP_studyID_datasetID_varID_1", paired_ID_col = "dbGaP_studyID_datasetID_varID_2", true_pairing_col = "true_pairing", rank_cutoffs = c(1,5,10), paired_group_col = "dbGaP_studyID_datasetID_2", multiple_correction = T, class_col = "concept", ref_group_col = "dbGaP_studyID_datasetID_1") 
+
+
+
+
+
+
 
 
 accuracyTotals <- sapply(score_cols, function(x) {
     print(paste0("calculating ", x, " accuracy")) 
-    calc_accuracy(rankData, rank_col = paste0("rank_", x), ref_ID_col = "dbGaP_studyID_datasetID_varID_1", paired_ID_col = "dbGaP_studyID_datasetID_varID_2", correct_pairings_col = "correct_pairing", pairing_rank_cutoffs = c(1,5,10), paired_multiple_group_col = "dbGaP_studyID_datasetID_2", multiple_correction = T, class_col = "concept", ref_multiple_group_col = "dbGaP_studyID_datasetID_1") 
-    }, USE.NAMES = T, simplify = F)
+    calc_accuracy(rank_data, rank_col = paste0("rank_", x), ref_ID_col = "dbGaP_studyID_datasetID_varID_1", paired_ID_col = "dbGaP_studyID_datasetID_varID_2", true_pairing_col = "true_pairing", rank_cutoffs = c(1,5,10), paired_group_col = "dbGaP_studyID_datasetID_2", multiple_correction = T, class_col = "concept", ref_group_col = "dbGaP_studyID_datasetID_1") 
+}, USE.NAMES = T, simplify = F)
 
 
-#rm(allScoresData) #remove all scores data so its not taking up memory
+#run test checks for accuracy stats based on data used
+mannual_map_ref_data = '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv'
 
-cores <- detectCores() - 2 # macbook pro can split 4 cores into 8 cores for parallel procesing
+
 
 
 
@@ -451,7 +438,7 @@ f1vars_1var1dataset <- sapply(paste0('top', c(1,5,10), '_1var1dataset'), functio
 TPboolVars <- set_names(paste0('top', pairing_rankCutOffs, "TP_1varPair"), 
                         paste0('top', pairing_rankCutOffs, "TP_1var1dataset"))
 F1parameters <- c(f1vars_1varPair, f1vars_1var1dataset)
-c(starts_with("total"), "numPairingsRanked",  matches("top\\d+posPred")))
+#c(starts_with("total"), "numPairingsRanked",  matches("top\\d+posPred")))
 timestamp()
 accuracyTotals <- sapply(possibleScores, function(x){print(paste0("calculating ", x, " accuracy")); accuracyTotals(rankData, x)}, USE.NAMES = T, simplify = F)
 accuracyTotals[["overallAccuracyAllScores"]] <- do.call(rbind, accuracyTotals) %>% filter(concept == "All Concepts") %>% dplyr::mutate(score = names(accuracyTotals)) %>% 
@@ -469,10 +456,5 @@ accuracyDifferencesData <- do.call('cbind', accuracyDifferencesData)
 accuracyDifferences.top1recall <- differences(accuracyDifferencesData %>% select(ends_with(".recall")), grep(".recall", colnames(accuracyDifferencesData), value = T))
 rownames(accuracyDifferences.top1recall) <- rownames(accuracyDifferencesData)
 
-plot_ly(x = accuracyDifferences.top1recall$score_desc.top1.recall.DIFF_FROM.score_desc_SqNoisyOr_maxOtherMeta_euclidean.top1.recall*(100), y = row.names(accuracyDifferences.top1recall), type = 'bar') %>% 
-    layout(xaxis = list(title = "Recall Difference"), title ="variables scored by descriptions vs. combined with max score from variables scored on units/codelabels/distribtuion", font = list(size = 8))
-plot_ly(x = accuracyDifferences.top1recall$score_desc.top1.recall.DIFF_FROM.score_descUnits_SqNoisyOr_codeLabEuclidean.top1.recall*(100), y = row.names(accuracyDifferences.top1recall), type = 'bar') %>% 
-    layout(xaxis = list(title = "Recall Difference"), title ="variables scored by descriptions vs. descriptions+units scores combined with codelabels/distribtuion scores", font = list(size = 8))
-plot_ly(x = accuracyDifferences.top1recall$score_desc.top1.recall.DIFF_FROM.score_desc_SqNoisyOr_codeLabEuclidean.top1.recall*(100), y = row.names(accuracyDifferences.top1recall), type = 'bar') %>% 
-    layout(xaxis = list(title = "Recall Difference"), title ="variables scored by descriptions vs. descriptions scores combined with codelabels/distribtuion scores", font = list(size = 8))
+
 
