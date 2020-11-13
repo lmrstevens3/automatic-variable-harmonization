@@ -25,7 +25,7 @@ def lemmatize_variable_documentation(doc_text):  # TODO See if var really needs 
 
 def calc_tfidf(corpora, vocabulary=None):
     """
-    Create a matrix where each row represents a variables and each column represents a word and counts are
+    Create a matrix where each row represents a variable and each column represents a word and counts are
     weighted by TF-IDF- matrix is n variable (row) X N all unique words in all documentation (cols)
     :return:
     TFIDFVectorizer with updated matrix of TF-IDF features
