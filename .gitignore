@@ -14,3 +14,5 @@
 .DS_Store
 
 /.ipynb_checkpoints/
+/tests/FHS_CHS_ARIC_MESA_varDoc_dbGaP_NLP.csv
+/tests/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv
