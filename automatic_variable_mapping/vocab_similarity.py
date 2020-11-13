@@ -131,7 +131,6 @@ class VariableSimilarityCalculator:
                     corpus_ref_idx_to_ref_id[corpus_ref_idx] = ref_id
 
             ids_to_subset = list(set(corpus_ref_idx_to_ref_id.keys()))  # n
-            print(ids_to_subset)
             sub_tfidf = tfidf[ids_to_subset]  # [n, m]
             cosine_similarities = np.matmul(tfidf.toarray(), sub_tfidf.toarray().transpose())  # [n,m] X [m, m] = [n, m]
 
@@ -150,23 +149,6 @@ class VariableSimilarityCalculator:
         result = pd.DataFrame(cache, columns=self.score_cols)
 
         return result
-
-    # def variable_similarity(self, file_name, score_name, doc_col, data, id_col):
-    #     # PRE-PROCESS DATA & BUILD CORPORA
-    #     # var_col and defn/units/codeLabels_col hold information from the data frame and are used when
-    #     # processing the data
-    #
-    #     corpus_builder = CorpusBuilder(doc_col)
-    #     corpus_builder.build_corpus(data, id_col)
-    #     corpus_builder.calc_tfidf()
-    #     print '\n' + score_name + " tfidf_matrix size:"
-    #     print corpus_builder.tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
-    #
-    #     self.init_cache(file_name)
-    #
-    #     # SCORE DATA + WRITE OUT RESULTS
-    #     return self.score_variables(corpus_builder.all_docs(), corpus_builder.tfidf_matrix)
-
 
 def cache_sim_scores(score_cols, c, ref_id, ref_var_scores):
     # retrieve top_n pairings for reference
