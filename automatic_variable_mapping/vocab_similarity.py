@@ -122,6 +122,7 @@ class VariableSimilarityCalculator:
             # 3. In a single matrix multiplication operation, calculate cosine similarity between proposed tfidf submatrix and the whole tfidf matrix
             # 4. Re-map ref_ids to cosine-similarity matrix
 
+            print "Finding valid ref ids"
             corpus_ref_idx_to_ref_id = {}
             for ref_id in self.ref_ids:
                 ref_id = str(ref_id)
@@ -139,17 +140,19 @@ class VariableSimilarityCalculator:
             sub_tfidf = tfidf[ids_to_subset]
             # tfidf has shape [m, k]
             # [n, m] X [m, k] = [n, k]
+            print "Multiplying matrices"
             cosine_similarities = np.matmul(tfidf.toarray(),
                                             sub_tfidf.toarray().transpose())
 
             cache = list()
             for i, corpus_ref_idx in enumerate(ids_to_subset):
+                print "Finding matches for", corpus_ref_idx
                 similarities_vec = cosine_similarities[i]
                 ref_id = corpus_ref_idx_to_ref_id[corpus_ref_idx]
                 # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
-                # rel_var_indices = [i for i in similarities_vec.argsort()[::-1] if i != corpus_ref_idx]
-                # ref_var_scores = [(variable, similarities_vec[variable]) for variable in rel_var_indices]
-                ref_var_scores = self.select_scores(similarities_vec)
+                rel_var_indices = [i for i in similarities_vec.argsort()[::-1] if i != corpus_ref_idx]
+                ref_var_scores = [(variable, similarities_vec[variable]) for variable in rel_var_indices]
+                ref_var_scores = self.select_scores(ref_var_scores)
                 ref_var_scores = filter_scores(self.ref_ids, self.pairable, ref_var_scores, ref_id)
                 cache.append(cache_sim_scores(self.score_cols, c, ref_id, ref_var_scores))
 
@@ -161,7 +164,7 @@ class VariableSimilarityCalculator:
 
 def select_top_sims(similarities, n):
     # TODO HPL: This probably shouldn't be using a pandas dataframe
-    return similarities.sort_values(["score"], ascending=False).take(n)
+    return similarities[:n]
 
 def cache_sim_scores(score_cols, c, ref_id, ref_var_scores):
     # retrieve top_n pairings for reference
