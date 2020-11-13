@@ -16,6 +16,7 @@ import pandas as pd
 from progressbar import ProgressBar, FormatLabel, Percentage, Bar
 # noinspection PyProtectedMember
 from sklearn.metrics.pairwise import linear_kernel
+import numpy as np
 
 import multiprocessing
 from functools import partial
@@ -98,40 +99,56 @@ class VariableSimilarityCalculator:
 
         corpus_doc_ids = [doc_id for doc_id, _ in c]
 
-        p = multiprocessing.Pool(processes=num_cpus)
+        if num_cpus:
+            p = multiprocessing.Pool(processes=num_cpus)
 
-        cache = list(tqdm.tqdm(p.imap(partial(helper,
-                                                self.score_cols,
-                                                self.ref_ids,
-                                                self.pairable,
-                                                self.select_scores,
-                                                corpus_doc_ids,
-                                                tfidf,
-                                                c),
-                                      self.ref_ids),
-                               total=len(self.ref_ids)))
+            cache = list(tqdm.tqdm(p.imap(partial(helper,
+                                                  self.score_cols,
+                                                  self.ref_ids,
+                                                  self.pairable,
+                                                  self.select_scores,
+                                                  corpus_doc_ids,
+                                                  tfidf,
+                                                  c),
+                                          self.ref_ids),
+                                   total=len(self.ref_ids)))
 
-        cache = [y for x in cache for y in x]
+            cache = [y for x in cache for y in x]
+        else:
+            # TODO HPL:
+            # run on GPU
+            # 1. Consolidate all ref_ids that need to be mapped
+            # 2. Subset tfidf matrix accordingly
+            # 3. In a single matrix multiplication operation, calculate cosine similarity between proposed tfidf submatrix and the whole tfidf matrix
+            # 4. Re-map ref_ids to cosine-similarity matrix
+
+            corpus_ref_idx_to_ref_id = {}
+            for ref_id in self.ref_ids:
+                ref_id = str(ref_id)
+                # get index of filter data in corpus
+                corpus_ref_idx = corpus_doc_ids.index(ref_id)
+                if corpus_ref_idx >= 0:
+                    corpus_ref_idx_to_ref_id[corpus_ref_idx] = ref_id
+
+            ids_to_subset = list(set(corpus_ref_idx_to_ref_id.keys()))  # n
+            sub_tfidf = tfidf[ids_to_subset]  # [n, m]
+            cosine_similarities = np.matmul(tfidf.toarray(), sub_tfidf.toarray().transpose())  # [n,m] X [m, m] = [n, m]
+
+            cache = list()
+            for i, corpus_ref_idx in enumerate(ids_to_subset):
+                similarities_vec = cosine_similarities[i]
+                ref_id = corpus_ref_idx_to_ref_id[corpus_ref_idx]
+                rel_var_indices = [i for i in similarities_vec.argsort()[::-1] if i != corpus_ref_idx]
+                ref_var_scores = [(variable, cosine_similarities[variable]) for variable in rel_var_indices]
+                ref_var_scores = self.select_scores(ref_var_scores)
+                ref_var_scores = filter_scores(self.ref_ids, self.pairable, ref_var_scores, ref_id)
+                cache.append(cache_sim_scores(self.score_cols, c, ref_id, ref_var_scores))
+
+            cache = [y for x in cache for y in x]
+
         result = pd.DataFrame(cache, columns=self.score_cols)
 
         return result
-
-    # def variable_similarity(self, file_name, score_name, doc_col, data, id_col):
-    #     # PRE-PROCESS DATA & BUILD CORPORA
-    #     # var_col and defn/units/codeLabels_col hold information from the data frame and are used when
-    #     # processing the data
-    #
-    #     corpus_builder = CorpusBuilder(doc_col)
-    #     corpus_builder.build_corpus(data, id_col)
-    #     corpus_builder.calc_tfidf()
-    #     print '\n' + score_name + " tfidf_matrix size:"
-    #     print corpus_builder.tfidf_matrix.shape  # 105611 variables and 33031 unique concepts
-    #
-    #     self.init_cache(file_name)
-    #
-    #     # SCORE DATA + WRITE OUT RESULTS
-    #     return self.score_variables(corpus_builder.all_docs(), corpus_builder.tfidf_matrix)
-
 
 def cache_sim_scores(score_cols, c, ref_id, ref_var_scores):
     # retrieve top_n pairings for reference
