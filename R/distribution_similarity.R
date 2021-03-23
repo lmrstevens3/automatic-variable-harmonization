@@ -64,9 +64,22 @@ calc_pairings_data <- function(pair_data, ref_data){
 ##### main script to get continous scores
 
 #read in all studies meta data from dbGAP var_report/xml files: 
-#metaDataInfoAllStudies <- FCAM_allXMLData_NLP
-var_doc_data <-read.table('/Users/laurastevens/Dropbox/Graduate School/Data Integration and Harmonization/extract_metadata/FHS_CHS_ARIC_MESA_dbGaP_var_report_dict_xml_Info_contVarNA_NLP_timeInterval_noDate_noFU_5-9-19.csv', sep = ',', header = T, stringsAsFactors = F, na.strings = "")
-#dim(metaDataInfoAllStudies %>% select(-data_desc_1, -detailedTimeIntervalDbGaP_1) %>% dplyr::filter(is.na(var_coding_labels_1))) 
+#var_doc_data <- FCAM_allXMLData_NLP
+var_doc_data <-fread('/Users/laurastevens/Dropbox/Graduate School/Data Integration and Harmonization/variable_mapping_automated/tiff_laura_shared/FHS_CHS_ARIC_MESA_dbGaP_var_doc_NLP.csv', sep = ',', header = T, stringsAsFactors = F, na.strings = "")
+
+var_doc_data <- var_doc_data %>% dplyr::select( "dbGaP_studyID_1" = dbGaP_study_id, 
+                                                              "dbGaP_datasetID_1" = dbGaP_dataset_id,  
+                                                              "varID_1" = variable_id,                         
+                                                              "var_desc_1" = variable_description,
+                                                              "units_1" = units,  
+                                                              "var_coding_labels_1" = variable_coding_labels,
+                                                              "study_1" = study,                              
+                                                              "dbGaP_dataset_label_1" = dbGaP_dataset_label, 
+                                                              "var_coding_counts_distribution_1" = variable_coding_counts_distribution, 
+                                                              "metadataID_1" = metadataID,
+                                                              "dbGaP_studyID_datasetID_1" = study_dataset_dbGaP_id)
+
+
 
 #conceptMappedVarsData <- conceptVarsData_NLP_NAcontVar
 mannual_map_var_data <- read.table('/Users/laurastevens/Dropbox/Graduate School/Data Integration and Harmonization/Manual Concept Variable Mappings BioLINCC and DbGaP/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv', sep = ',', header = T, stringsAsFactors = F, na.strings = "")
@@ -104,7 +117,7 @@ timestamp()
 #stop cluster, remove large objects from memory and write data to a file-takes about 7 min
 stopCluster(cluster)
 rm(continuousVarDataCorrect.vs.AllContVars, doc_continuous_vars, continuous_var_pairings_mannual_map_var)
-write.table(continuousVarScoreData, '/Users/laurastevens/Dropbox/Graduate School/Data and MetaData Integration/ExtractMetaData/distribution_scores_continuous_vars.csv', sep = ',', qmethod = 'double', na = "", row.names = F)
+write.table(continuousVarScoreData, 'variable_mapping_automated/output/distribution_scores_continuous_vars.csv', sep = ',', qmethod = 'double', na = "", row.names = F)
 
 rm(continuous_var_score_data)
 
