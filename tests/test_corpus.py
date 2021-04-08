@@ -73,7 +73,7 @@ class TestCorpusBuilder(TestCase):
         # corpora_tfidfs = [calc_tfidf_single_corpus(tfidf_all, corpus) for corpus in tfidf_all.corpora]
         # dfs = {word: [1 / (np.exp(tfidf.tf.idf_[tfidf.tf.vocabulary_[word]] - 1))
         #               for tfidf in corpora_tfidfs] for word in tst_words}
-        # # check indicies for words in tfidf match
+        # # check indices for words in tfidf match
         # assert set([tfidf.tf.vocabulary_[w] for w in tst_words for tfidf in corpora_tfidfs]) == set(word_idxs)
         # # check num words represented in each tfidf are equal
         # assert sum([tfidf_all.tfidf_matrix.shape[1] == tfidf.tfidf_matrix.shape[1] for tfidf in corpora_tfidfs]) == 4
