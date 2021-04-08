@@ -5,7 +5,7 @@ import numpy as np
 
 ref_id_col = 'dbGaP_studyID_datasetID_varID_1'
 doc_col = 'var_desc_1'
-# doc_col = list("var_desc_1”, “units_1, “var_coding_counts_distribution_1)
+# doc_col = list("var_desc_1", "units_1", "var_coding_counts_distribution_1")
 data_file = "tests/test_mannual_map_ref_data.csv"
 score_file = 'tests/test_var_similarity_scores_rank_data.csv'
 
