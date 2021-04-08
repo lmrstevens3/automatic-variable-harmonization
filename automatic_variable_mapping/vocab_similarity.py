@@ -87,7 +87,7 @@ class VariableSimilarityCalculator:
     #         self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
     #     print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
-    def score_variables(self, c, tfidf, num_cpus=None):
+    def score_variables(self, corpora, tfidf, num_cpus=None):
         """
         The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
         with a score, for each variable as a pandas data frame.
@@ -97,7 +97,7 @@ class VariableSimilarityCalculator:
 
         # cache = init_cache_output(None, "pandas", file_name)
 
-        corpus_doc_ids = [doc_id for doc_id, _ in c]
+        corpus_doc_ids = [doc_id for doc_id, _ in corpora]
 
         if num_cpus:
             p = multiprocessing.Pool(processes=num_cpus)
@@ -109,7 +109,7 @@ class VariableSimilarityCalculator:
                                                   self.select_scores,
                                                   corpus_doc_ids,
                                                   tfidf,
-                                                  c),
+                                                  corpora),
                                           self.ref_ids),
                                    total=len(self.ref_ids)))
 
@@ -154,7 +154,7 @@ class VariableSimilarityCalculator:
                 ref_var_scores = [(variable, similarities_vec[variable]) for variable in rel_var_indices]
                 ref_var_scores = self.select_scores(ref_var_scores)
                 ref_var_scores = filter_scores(self.ref_ids, self.pairable, ref_var_scores, ref_id)
-                cache.append(cache_sim_scores(self.score_cols, c, ref_id, ref_var_scores))
+                cache.append(cache_sim_scores(self.score_cols, corpora, ref_id, ref_var_scores))
 
             cache = [y for x in cache for y in x]
 
@@ -216,6 +216,9 @@ def merge_score_results(score_matrix1, score_matrix2, how):
 
 def partition(data, by):
     return [data[data[by] == col_value] for col_value in data[by].unique()]
+
+def default_pairable(score, pair_id, ref_ids, ref_id):
+    return score >= 0 and pair_id != ref_id
 
 
 def vals_differ_in_col(col):
