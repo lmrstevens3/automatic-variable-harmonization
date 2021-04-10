@@ -59,16 +59,6 @@ class TestCorpusBuilder(TestCase):
         assert (tfidf_matrix.nnz != check_tfidf.nnz) == 0
 
     def test_calc_tfidf_multi_corpus(self):
-        file_path = "tests/test_vocab_similarity_data.csv"
-        # Read in test data
-        data = pd.read_csv(file_path, sep=",",
-                           quotechar='"',
-                           na_values="",
-                           low_memory=False)
-        data.var_desc_1 = data.var_desc_1.fillna("")
-
-        corpora_data = partition(data, 'study_1')
-
         # id_col = "varDocID_1"
         # doc_col = ["var_desc_1"]
         # n_corpora = len(corpora_data)
