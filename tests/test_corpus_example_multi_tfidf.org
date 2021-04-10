@@ -69,6 +69,7 @@ num_unique_tokens = len(unique_tokens) # 18
    \mathrm{idf}(t, C) = \log{\frac{M}{\sum^C \frac{\mathrm{df}(t, D_c)}{N_c} }}
    $$
 
+**** TODO The above formula needs to be normalized because it is giving the same results as normal tf-idf for any corpora where each corpus is the same size
 * Output
  #+begin_src python
 # 'term_count_in_doc' = f_t,d
