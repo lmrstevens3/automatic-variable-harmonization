@@ -1,0 +1,205 @@
+* Input
+** Corpora
+   We start with a set of corpora, each corpus being composed of tokenized documents. For this example, there are three corpora, each containing four documents.
+
+ #+begin_src python
+corpora = [[['variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance'],
+            ['variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex'],
+            ['variable', 'descriptive', 'individual'],
+            [ 'background']],
+
+           [['race', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance'],
+            ['gender', 'describing', 'self', 'identified', 'category', 'basis', 'sex'],
+            ['sex', 'descriptive', 'individual'],
+            ['affiliation', 'background']],
+
+           [['race', 'variable', 'group', 'individual', 'certain', 'characteristic', 'common', 'owing', 'common', 'inheritance'],
+            ['gender', 'variable', 'self', 'identified', 'category', 'basis', 'sex'],
+            ['sex', 'variable', 'individual'],
+            ['affiliation', 'background']]]
+
+ #+end_src
+
+ The set of unique tokens spanning all corpora and documents is below.
+#+BEGIN_SRC python
+unique_tokens_by_doc = [set(doc) for corpus in corpora for doc in corpus]
+unique_tokens = set([tok for corpus in corpora for doc in corpus for tok in doc])
+# unique_tokens = set(['race', 'variable', 'describing', 'group', 'individual', 'certain',
+#                      'characteristic', 'common', 'owing', 'inheritance',
+#                      'gender', 'self', 'identified', 'category', 'basis', 'sex',
+#                      'descriptive', 'affiliation', 'background'])
+
+num_unique_tokens = len(unique_tokens) # 18
+# f'_t,d
+# num_unique_tokens_by_doc = [9, 7, 3, 1,
+#                             9, 7, 3, 2,
+#                             9, 7, 3, 2]
+
+ #+END_SRC
+
+* Formuli
+** Normal TF-IDF
+   All documents exist within a single corpus.
+*** Term frequency
+    The number of times term $t$ occurs in document $d$ weighted by the number of all tokens in $d$.
+    $$
+    \mathrm{tf}(t,d) = \frac{f_{t,d}}{\sum_{t\prime \in d} f_{t\prime, d}}
+    $$
+*** Inverse document frequency
+    The number of documents in $D$ containing any mention of term $t$, weighted by the number of documents in $D$.
+    $$
+    N = |D|
+    $$
+    $$
+    \mathrm{df}(t, D) = \{d \in D : t \in d\}
+    $$
+    $$
+    \mathrm{idf}(t, D) = \log{\frac{N}{\mathrm{df}(t,D)}
+    $$
+** Multi-corpus TF-IDF
+   Documents are separated into corpora. This accounts for inter-corpus differences.
+*** Term frequency
+    The same as above since the calculation only depends on the particular document.
+*** Inverse document frequency
+    The sum of the number of documents in each corpora containing any mention of term $t$, weighted by the number of documents in each corpus, and then by the number of corpora.
+    $$
+    M=|C|
+    $$
+   $$
+   \mathrm{idf}(t, C) = \log{\frac{M}{\sum^C \frac{\mathrm{df}(t, D_c)}{N_c} }}
+   $$
+
+* Output
+ #+begin_src python
+# 'term_count_in_doc' = f_t,d
+# 'term_doc_count' = df(t, D)
+# num_unique_tokens_by_doc = [9, 7, 3, 1,
+#                             9, 7, 3, 2,
+#                             9, 7, 3, 2]
+
+num_corpora = len(corpora) # M = 3
+num_docs_by_corpus = [len(corpus) for corpus in corpora] # D_c = [4, 4, 4]
+num_docs = sum(num_docs_by_corpus) # N = 12
+
+# TODO incorporate smoothing
+freqs = {
+    'race': {'term_count_in_doc': [0, 0, 0, 0,
+                                   1, 0, 0, 0,
+                                   1, 0, 0, 0],
+             'term_doc_count': {'tfidf': 2,
+                                'multi': [0, 1, 1]},
+             'tf': [0/9, 0/7, 0/3, 0/1,
+                    1/9, 0/7, 0/3, 0/2,
+                    1/9, 0/7, 0/3, 0/2],
+             'tfidf': {'idf': log(12/2),
+                       'final': [0, 0, 0, 0,
+                                 (1/9)*(log(6)), 0, 0, 0,
+                                 (1/9)*(log(6)), 0, 0, 0]},
+             'multi': {'idf': log(3/(0/4 + 1/4 + 1/4)),
+                       'final': [0, 0, 0, 0,
+                                 (1/9)*(log(6)), 0, 0, 0
+                                 (1/9)*(log(6)), 0, 0, 0]}},
+    'variable': {'term_count_in_doc': [1, 1, 1, 0,
+                                       0, 0, 0, 0,
+                                       1, 1, 1, 0],
+                 'term_doc_count': {'tfidf': 6,
+                                    'multi': [3, 0, 3]},
+                 'tf': [1/9, 1/7, 1/3, 0/1,
+                        0/9, 0/7, 0/3, 0/2,
+                        1/9, 1/7, 1/3, 0/2],
+                 'tfidf': {'idf': log(12/6),
+                           'final': [(1/9)*log(2), (1/7)*log(2), (1/3)*log(2), 0,
+                                     0, 0, 0, 0,
+                                     (1/9)*log(2), (1/7)*log(2), (1/3)*log(2), 0]},
+                 'multi': {'idf': log(3/(3/4 + 0/4 + 3/4)),
+                           'final': [0, 0, 0, 0,
+                                     (1/9)*(log(6)), 0, 0, 0
+                                     (1/9)*(log(6)), 0, 0, 0]}
+                 },
+    'describing': {'term_count_in_doc': [1, 1, 0, 0,
+                                         1, 1, 0, 0,
+                                         0, 0, 0, 0],
+                   'term_doc_count': {'tfidf': 4,
+                                      'multi': [2, 0, 2]}},
+    'group': {'term_count_in_doc': [1, 0, 0, 0,
+                                    1, 0, 0, 0,
+                                    1, 0, 0, 0],
+              'term_doc_count': {'tfidf': 3,
+                                 'multi': [1, 1, 1]}},
+    'individual': {'term_count_in_doc': [1, 0, 1, 0,
+                                         1, 0, 1, 0,
+                                         1, 0, 1, 0],
+                   'term_doc_count': {'tfidf': 6,
+                                      'multi': [2, 2, 2]}},
+    'certain': {'term_count_in_doc': [1, 0, 0, 0,
+                                      1, 0, 0, 0,
+                                      1, 0, 0, 0],
+                'term_doc_count': {'tfidf': 3,
+                                   'multi': [1, 1, 1]}},
+    'characteristic': {'term_count_in_doc': [1, 0, 0, 0,
+                                             1, 0, 0, 0,
+                                             1, 0, 0, 0],
+                       'term_doc_count': {'tfidf': 3,
+                                          'multi': [1, 1, 1]}},
+    'common': {'term_count_in_doc': [2, 0, 0, 0,
+                                     2, 0, 0, 0,
+                                     2, 0, 0, 0],
+               'term_doc_count': {'tfidf': 3,
+                                  'multi': [1, 1, 1]}},
+    'owing': {'term_count_in_doc': [1, 0, 0, 0,
+                                    1, 0, 0, 0,
+                                    1, 0, 0, 0],
+              'term_doc_count': {'tfidf': 3,
+                                 'multi': [1, 1, 1]}},
+    'inheritance': {'term_count_in_doc': [1, 0, 0, 0,
+                                          1, 0, 0, 0,
+                                          1, 0, 0, 0],
+                    'term_doc_count': {'tfidf': 3,
+                                       'multi': [1, 1, 1]}},
+    'gender': {'term_count_in_doc': [0, 0, 0, 0,
+                                     0, 1, 0, 0,
+                                     0, 1, 0, 0],
+               'term_doc_count': {'tfidf': 2,
+                                  'multi': [0, 1, 1]}},
+    'self': {'term_count_in_doc': [0, 1, 0, 0,
+                                   0, 1, 0, 0,
+                                   0, 1, 0, 0],
+             'term_doc_count': {'tfidf': 3,
+                                'multi': [1, 1, 1]}},
+    'identified': {'term_count_in_doc': [0, 1, 0, 0,
+                                         0, 1, 0, 0,
+                                         0, 1, 0, 0],
+                   'term_doc_count': {'tfidf': 3,
+                                      'multi': [1, 1, 1]}},
+    'category': {'term_count_in_doc': [0, 1, 0, 0,
+                                       0, 1, 0, 0,
+                                       0, 1, 0, 0],
+                 'term_doc_count': {'tfidf': 3,
+                                    'multi': [1, 1, 1]}},
+    'basis': {'term_count_in_doc': [0, 1, 0, 0,
+                                    0, 1, 0, 0,
+                                    0, 1, 0, 0],
+              'term_doc_count': {'tfidf': 3,
+                                 'multi': [1, 1, 1]}},
+    'sex': {'term_count_in_doc': [0, 1, 0, 0,
+                                  0, 1, 1, 0,
+                                  0, 1, 1, 0],
+            'term_doc_count': {'tfidf': 5,
+                               'multi': [1, 2, 2]}},
+    'descriptive': {'term_count_in_doc': [0, 0, 1, 0,
+                                          0, 0, 1, 0,
+                                          0, 0, 0, 0],
+                    'term_doc_count': {'tfidf': 2,
+                                       'multi': [0, 1, 1]}},
+    'affiliation': {'term_count_in_doc': [0, 0, 0, 0,
+                                          0, 0, 0, 1,
+                                          0, 0, 0, 1],
+                    'term_doc_count': {'tfidf': 2,
+                                       'multi': [0, 1, 1]}}
+    'background': {'term_count_in_doc': [0, 0, 0, 1,
+                                         0, 0, 0, 1,
+                                         0, 0, 0, 1],
+                   'term_doc_count': {'tfidf': 3,
+                                      'multi': [1, 1, 1]}}
+}
+ #+end_src
