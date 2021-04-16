@@ -8,6 +8,7 @@ from automatic_variable_mapping import corpus
 import pandas as pd
 import numpy as np
 import multiprocessing
+from gensim.models import KeyedVectors, FastText
 
 from automatic_variable_mapping.vocab_similarity import partition
 
@@ -37,14 +38,14 @@ class TestCorpusBuilder(TestCase):
         vocabulary = list(set([tok for c in corpora for _, doc in c for tok in doc]))
         check_tf = TfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
                                    lowercase=False, vocabulary=vocabulary)
-        check_tfidf = check_tf.fit_transform([doc for _, doc in corpora[0]])
+        check_tfidf = check_tf.fit_transform([doc for _, doc in corpora])
 
         # check CorporaTfidfVectorizer and TfidfVectorizer return same results if corpora = 1 corpus
         assert tfidf_matrix.shape == (nrows, 79)
         # assert check_tf.vocabulary_ == corpus_builder.tf.vocabulary_
         assert tfidf_matrix.shape == check_tfidf.shape
         assert tfidf_matrix.nnz == check_tfidf.nnz
-        assert  tfidf_matrix.dtype == check_tfidf.dtype
+        assert tfidf_matrix.dtype == check_tfidf.dtype
         assert tfidf_matrix[0, 75].round(10) == 0.3692482208
         assert (tfidf_matrix.nnz != check_tfidf.nnz) == 0
 
@@ -89,14 +90,14 @@ class TestCorpusBuilder(TestCase):
         #                                                  [16.0 / 502, 43.0 / 207, 5.0 / 160, 12.0 / 135]]
 
         corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain',
-                                             'characteristic', 'common', 'owing', 'common', 'inheritance']),
-                                   ('gender',
-                                    ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis',
-                                     'sex']),
-                                   ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based',
-                                            'gamete', 'gonad', 'individual']),
-                                   ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
-        tfidf_matrix = corpus.calc_tfidf(corpora)
+                              'characteristic', 'common', 'owing', 'common', 'inheritance']),
+                    ('gender',
+                     ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis',
+                      'sex']),
+                    ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based',
+                             'gamete', 'gonad', 'individual']),
+                    ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+        _, tfidf_matrix = corpus.calc_tfidf(corpora)
         m = np.array([[0., 0., 0.29, 0., 0., 0.23, 0.29, 0., 0., 0., 0.29,
                        0.29, 0., 0., 0., 0., 0., 0., 0.19, 0.23, 0., 0.,
                        0., 0.29, 0.59, 0.29, 0.],
@@ -167,24 +168,24 @@ class TestCorpusBuilder(TestCase):
         corpora = corpus.build_corpora(['documentation'], [data], 'id')
 
         assert corpora == [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain',
-                                                     'characteristic', 'common', 'owing', 'common', 'inheritance']), (
-                                               'gender',
-                                               ['gender', 'variable', 'describing', 'self', 'identified', 'category',
-                                                'basis', 'sex']),
-                                           ('sex', ['sex', 'variable', 'descriptive', 'biological',
-                                                    'characterization', 'based', 'gamete', 'gonad',
-                                                    'individual']),
-                                           ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+                                      'characteristic', 'common', 'owing', 'common', 'inheritance']), (
+                                'gender',
+                                ['gender', 'variable', 'describing', 'self', 'identified', 'category',
+                                 'basis', 'sex']),
+                            ('sex', ['sex', 'variable', 'descriptive', 'biological',
+                                     'characterization', 'based', 'gamete', 'gonad',
+                                     'individual']),
+                            ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
 
     def test_all_docs(self):
         corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain',
-                                             'characteristic', 'common', 'owing', 'common', 'inheritance']),
-                                   ('gender',
-                                    ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis',
-                                     'sex']),
-                                   ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based',
-                                            'gamete', 'gonad', 'individual']),
-                                   ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+                              'characteristic', 'common', 'owing', 'common', 'inheritance']),
+                    ('gender',
+                     ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis',
+                      'sex']),
+                    ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based',
+                             'gamete', 'gonad', 'individual']),
+                    ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
 
         result = corpus.all_docs(corpora)
         assert result == [

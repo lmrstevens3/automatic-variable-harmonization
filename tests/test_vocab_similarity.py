@@ -1,8 +1,8 @@
 from unittest import TestCase
-
 import numpy as np
-
-from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator, calculate_similarity, filter_scores, identity
+import pandas as pd
+from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator, default_pairable, \
+    calculate_similarity, filter_scores, identity
 
 
 class TestVariableSimilarityCalculator(TestCase):
@@ -90,7 +90,7 @@ class TestVariableSimilarityCalculator(TestCase):
                        0., 0., 0.45, 0.45, 0., 0.45, 0.45, 0., 0., 0., 0.,
                        0., 0., 0., 0., 0.]])
 
-        result = v.score_variables(corpora[0], m, num_cpus=2)
+        result = v.score_docs(corpora, m, num_cpus=2)
 
         expected = np.array([['race', 'gender', 0.1188],
                              ['race', 'sex', 0.1104],
@@ -134,3 +134,7 @@ class Test(TestCase):
 
     def test_select_top_sims_by_group(self):
         self.fail()
+
+
+
+
