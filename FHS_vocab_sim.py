@@ -41,7 +41,7 @@ corpora = corpus.build_corpora([doc_col], [data], ref_id_col)
 # In[5]:
 
 
-tfidf_matrix = corpus.calc_tfidf(corpora)
+vocab, tfidf_matrix = corpus.calc_tfidf(corpora)
 
 
 # In[9]:
@@ -56,7 +56,7 @@ reload(vocab_similarity)
 
 v = vocab_similarity.VariableSimilarityCalculator(data[ref_id_col])
 v.init_cache()
-v.score_variables(corpora[0], tfidf_matrix)
+v.score_docs(corpora, tfidf_matrix)
 
 
 # In[99]:
