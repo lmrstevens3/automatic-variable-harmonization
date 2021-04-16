@@ -10,6 +10,7 @@ from tfidf import CorporaTfidfVectorizer
 tokenizer = RegexpTokenizer(r"\w+")
 lemmatizer = WordNetLemmatizer()
 
+
 def lemmatize_variable_documentation(doc_text):  # TODO See if var really needs to be passed here
     # if doc_col is multiple columns,  concatenate text from all columns
     doc = " ".join([str(col) for col in doc_text])
@@ -19,10 +20,11 @@ def lemmatize_variable_documentation(doc_text):  # TODO See if var really needs 
 
     # remove stop words & lemmatize
     doc_lemma = [str(lemmatizer.lemmatize(x))
-                    for x in tok_punc_doc
-                    if all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english")]
+                 for x in tok_punc_doc
+                 if all([ord(c) in range(0, 128) for c in x]) and x not in stopwords.words("english")]
 
     return doc_lemma
+
 
 def calc_tfidf(corpora, vocabulary=None):
     """
@@ -34,7 +36,8 @@ def calc_tfidf(corpora, vocabulary=None):
     # BUILD TF-IDF VECTORIZER
     vocab = vocabulary or list(set([tok for corpus in corpora for _, doc in corpus for tok in doc]))
 
-    tf = CorporaTfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2", lowercase=False, vocabulary=vocab)
+    tf = CorporaTfidfVectorizer(tokenizer=lambda x: x, preprocessor=lambda x: x, use_idf=True, norm="l2",
+                                lowercase=False, vocabulary=vocab)
 
     corpus_all = all_docs(corpora)
     # CREATE MATRIX AND VECTORIZE DATA
@@ -42,11 +45,12 @@ def calc_tfidf(corpora, vocabulary=None):
     tf.fit(corpora)
     return tf.vocabulary, tf.transform(corpus_all)
 
+
 def calc_doc_embeddings(bow_matrix, vocab, word_vectors):
     """
-    :param corpora:
+    :param vocab:
+    :param bow_matrix:
     :param word_vectors:
-    :param tfidf_vocab:
     :return:
     """
     # set(vocab).difference(set(word_embeddings.index2word))
@@ -57,7 +61,8 @@ def calc_doc_embeddings(bow_matrix, vocab, word_vectors):
 
 
 def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
-    """Using a list of dataframes, create a corpus for each dataframe in the list
+    """Using a list of data-frames, create a corpus for each data-frame in the list
+    :param num_cpus:
     :param doc_col: list with column name(s) in corpora data that should be considered as a document
     :param id_col: column name of uniqueIDs for documents in the dataframe
     :param corpora_data: a list of dataframes containing the data to be turned into a corpus. Each dataframe in the list
@@ -67,17 +72,18 @@ def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
     second item contains the a list containing the processed text for each document/row in the corpus"""
     return [build_corpus(doc_col, corpus_data, id_col, num_cpus=num_cpus) for corpus_data in corpora_data]
 
+
 def all_docs(corpora):
     return [doc for corpus in corpora for _, doc in corpus]
 
 
 def helper(doc_col, row):
-    return (row[len(doc_col)], lemmatize_variable_documentation(row[:-1]))
+    return row[len(doc_col)], lemmatize_variable_documentation(row[:-1])
 
 
 def build_corpus(doc_col, corpus_data, id_col, num_cpus=None):
     """
-    Using the data and defn_col lists, the function assembles an identifier and text string for each row in data.
+    Using the data and id_col lists, the function assembles an identifier and text string for each row in data.
     The text string is then preprocessed by making all words lowercase, removing all punctuation,
     tokenizing by word, removing english stop words, and lemmatized (via wordnet).
     The function returns a list of lists,  where the first item in each list is the identifier and
@@ -95,7 +101,9 @@ def build_corpus(doc_col, corpus_data, id_col, num_cpus=None):
 
     if num_cpus:
         pool = multiprocessing.Pool(processes=num_cpus)
-        corpus = list (tqdm.tqdm(pool.imap(partial(helper, doc_col), corpus_data[cols].as_matrix()), total=corpus_data.shape[0]))
+        corpus = list(tqdm.tqdm(pool.imap(partial(helper, doc_col),
+                                          corpus_data[cols].as_matrix()),
+                                total=corpus_data.shape[0]))
     else:
         corpus = [(row[len(doc_col)], lemmatize_variable_documentation(row[:-1])) for row in corpus_data[cols].values]
 

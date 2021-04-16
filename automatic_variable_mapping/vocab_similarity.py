@@ -11,21 +11,16 @@
 ##########################################################################################
 
 # read in needed libraries
-import nltk
 
+import numpy as np
 import pandas as pd
-from progressbar import ProgressBar, FormatLabel, Percentage, Bar
 # noinspection PyProtectedMember
 from sklearn.metrics.pairwise import linear_kernel
-import numpy as np
 
-import multiprocessing
-from functools import partial
-import tqdm
 
 # ssl certificates are failing on mac. Can check for files in ~/nltk_data and if not present then can try download or manually download and save to that location
-#nltk.download('stopwords')
-#nltk.download('wordnet')
+# nltk.download('stopwords')
+# nltk.download('wordnet')
 
 
 def calculate_similarity(tfidf_matrix, ref_doc_index):
@@ -47,6 +42,7 @@ def calculate_similarity(tfidf_matrix, ref_doc_index):
     similar_variables = [(variable, cosine_similarities[variable]) for variable in rel_doc_indices]
 
     return similar_variables
+
 
 def identity(*args):
     return args
@@ -74,19 +70,6 @@ class VariableSimilarityCalculator:
         self.score_cols = score_cols
         self.cache = None
         self.file_name = None
-
-    def init_cache(self, file_name=None):
-        self.file_name = file_name
-        self.cache = pd.DataFrame([], columns=list(self.score_cols))
-        if self.file_name:
-            with open(self.file_name, "w") as f:
-                f.write(",".join(self.score_cols))
-                f.write("\n")
-
-    # def finalize_cached_output(self):
-    #     if not self.file_name:
-    #         self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
-    #     print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
     def score_docs(self, doc_ids, doc_vectors):
         """
@@ -119,8 +102,9 @@ class VariableSimilarityCalculator:
         for ref_id_idx, similarities_vec in zip(ref_id_indices, cosine_similarities):
             # print "Finding matches for", ref_doc_idx
             ref_id = doc_ids[ref_id_idx]
-            paired_doc_indices = [i for i in similarities_vec.argsort()[::-1] if i !=  ref_id_idx]
-            ref_doc_scores = [(paired_doc_idx, similarities_vec[paired_doc_idx]) for paired_doc_idx in paired_doc_indices]
+            paired_doc_indices = [i for i in similarities_vec.argsort()[::-1] if i != ref_id_idx]
+            ref_doc_scores = [(paired_doc_idx, similarities_vec[paired_doc_idx]) for paired_doc_idx in
+                              paired_doc_indices]
             ref_doc_scores = self.select_scores(ref_doc_scores)
             ref_doc_scores = filter_scores(self.ref_ids, self.pairable, ref_doc_scores, ref_id)
             cache.append(cache_sim_scores(self.score_cols, doc_ids, ref_id, ref_doc_scores))
@@ -130,13 +114,16 @@ class VariableSimilarityCalculator:
         result = pd.DataFrame(cache, columns=self.score_cols)
         return result
 
+
 def select_top_sims(similarities, n):
     # TODO HPL: This probably shouldn't be using a pandas dataframe
     return similarities[:n]
 
+
 def cache_sim_scores(score_cols, doc_ids, ref_id, ref_doc_scores):
     # retrieve top_n pairings for reference
-    return [append_cache(score_cols, ref_id, doc_ids[paired_doc_idx], score) for paired_doc_idx, score in ref_doc_scores]
+    return [append_cache(score_cols, ref_id, doc_ids[paired_doc_idx], score) for paired_doc_idx, score in
+            ref_doc_scores]
 
 
 def append_cache(score_cols, ref_doc_id, paired_id, score, file_name=None):
@@ -166,24 +153,9 @@ def helper(score_cols, ref_ids, pairable, select_scores, corpus_doc_ids, tfidf, 
         return cache_sim_scores(score_cols, c, ref_id, ref_doc_scores)
 
 
-def merge_score_results(score_matrix1, score_matrix2, how):
-    # determine how many rows should result when merging
-    # match = set(list(score_matrix1['matchID'])) - set(list(score_matrix2['matchID']))
-    # both = set(list(score_matrix2['matchID'])).intersection(set(list(score_matrix2['matchID'])))
-
-    # merge data - left adding smaller data to larger file
-    scored_merged = pd.merge(left=score_matrix1, right=score_matrix2,
-                             on=['matchID', 'conceptID', 'study_1', 'dbGaP_dataset_label_1',
-                                 'dbGaP_studyID_datasetID_1',
-                                 'varID_1', 'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1', 'metadataID_1',
-                                 'study_2', 'dbGaP_dataset_label_2', 'dbGaP_studyID_datasetID_2', 'varID_2',
-                                 'var_desc_2', 'timeIntervalDbGaP_2', 'cohort_dbGaP_2', 'metadataID_2'], how=how)
-
-    return scored_merged
-
-
 def partition(data, by):
     return [data[data[by] == col_value] for col_value in data[by].unique()]
+
 
 def default_pairable(score, pair_id, ref_ids, ref_id):
     return score >= 0 and pair_id != ref_id
@@ -201,8 +173,6 @@ def val_in_any_row_for_col(col):
     return lambda s1, s1_idx, s2, _: s1[col][s1_idx] in s2[col]
 
 
-
-
 def select_top_sims_by_group(similarities, n, data, group_col):
     similarities.append(data[group_col])
     return similarities.sort_values(["score"], ascending=False).groupby(by=[group_col]).take(n)
@@ -210,133 +180,7 @@ def select_top_sims_by_group(similarities, n, data, group_col):
 
 def main():
     pass
-    # dropbox_dir = "/Users/laurastevens/Dropbox/Graduate School/Data and MetaData Integration/ExtractMetaData/"
-    # metadata_all_vars_file_path = dropbox_dir + "tiff_laura_shared/FCAMD_var_report_NLP_missing_contVars.csv" \
-    #                                             "FHS_CHS_ARIC_MESA_dbGaP_var_report_dict_xml_Info_contVarNA_NLP_timeInterval_noDate_noFU_5-9-19.csv"
-    # concept_mapped_vars_file_path = dropbox_dir + "CorrectConceptVariablesMapped_contVarNA_NLP.csv"
-    #
-    # # READ IN DATA -- 07.17.19
-    # data = pd.read_csv(metadata_all_vars_file_path, sep=",", quotechar='"', na_values="",
-    #                    low_memory=False)  # when reading in data, check to see if there is "\r" if
-    # # not then don't use "lineterminator='\n'", otherwise u
-    # data.units_1 = data.units_1.fillna("")
-    # data.dbGaP_dataset_label_1 = data.dbGaP_dataset_label_1.fillna("")
-    # data.var_desc_1 = data.var_desc_1.fillna("")
-    # data.var_coding_labels_1 = data.var_coding_labels_1.fillna("")
-    # len(data)
-    #
-    # # read in filtering file
-    # filter_data = pd.read_csv(concept_mapped_vars_file_path, sep=",", na_values="", low_memory=False)  # n=700
-    # filter_data.units_1 = filter_data.units_1.fillna("")
-    # filter_data.dbGaP_dataset_label_1 = filter_data.dbGaP_dataset_label_1.fillna("")
-    # filter_data.var_desc_1 = filter_data.var_desc_1.fillna("")
-    # filter_data.var_coding_labels_1 = filter_data.var_coding_labels_1.fillna("")
-    # len(filter_data)
-    #
-    # # CODE TO GENERATE RANDOM IDS
-    # # data["random_id"] = random.sample(range(500000000), len(data))
-    # # filter_data_m = filter_data.merge(data[['concat', 'random_id']], on='concat', how='inner').reset_index(drop=True)
-    # # filter_data_m.to_csv("CorrectConceptVariablesMapped_RandomID_12.02.18.csv", sep=",", encoding="utf-8",
-    # #                      index = False)
-    #
-    # id_col = "varDocID_1"
-    #
-    # save_dir = "tiff_laura_shared/NLP text Score results/"
-    # # file_name_format = save_dir + "FHS_CHS_MESA_ARIC_text_similarity_scores_%s_ManuallyMappedConceptVars_7.17.19.csv"
-    # # ref_suffix = "_1"
-    # # pairing_suffix = "_2"
-    # # score_cols = [id_col + ref_suffix,
-    # #                 id_col.replace(pairing_suffix, "") + pairing_suffix]
-    # file_name_format = save_dir + "test_%s_vocab_similarity.csv"
-    # disjoint_col = 'dbGaP_studyID_datasetID_1'
-    #
-    # # data_cols_to_keep = ["study_1", 'dbGaP_studyID_datasetID_1', 'dbGaP_dataset_label_1', "varID_1",
-    # #                     'var_desc_1', 'timeIntervalDbGaP_1', 'cohort_dbGaP_1']
-    #
-    # def my_pred(score, s1, i1, s2, i2):
-    #     bools = [f(s1, i1, s2, i2)
-    #              for f in [val_in_any_row_for_col(disjoint_col),
-    #                        vals_differ_in_col(disjoint_col)]]
-    #     bools.append(score > 0)
-    #     return all(bools)
-    #
-    # top_n = len(data) - 1
-    #
-    # calc = VariableSimilarityCalculator(filter_data[id_col],
-    #                                     pairable=my_pred,
-    #                                     select_scores=lambda sims: select_top_sims_by_group(sims, top_n, data,
-    #                                                                                         disjoint_col))
-    #
-    # score_name = "score_desc"
-    # calc.score_cols[2] = score_name
-    # file_name = file_name_format % "descOnly"
-    # doc_col = ["var_desc_1"]
-    # corpus_col = "study_1"
-    # corpus_builder = CorpusBuilder(doc_col)
-    # corpus_builder.build_corpus(partition(data, by=corpus_col), id_col)
-    # corpus_builder.calc_tfidf()
-    #
-    # print '\n%s tfidf_matrix size %s' % (score_name, str(corpus_builder.tfidf_matrix.shape))
-    #
-    # calc.init_cache(file_name)
-    #
-    # scored = calc.score_variables(corpus_builder.all_docs(), corpus_builder.tfidf_matrix)
-    # # scored = calc.variable_similarity(file_name, score_name, doc_col)
-    # len(scored)  # 4013114
-
-    # score_name = "score_codeLab"
-    # file_name = file_name_format % "codingOnly"
-    # corpus_builder = CorpusBuilder(["var_coding_labels_1"])
-    # calc.init_cache(file_name)
-    # scored_coding = calc.score_variables(corpus_builder)
-    # # len(scored_coding)
-    #
-    # score_name = "score_units"
-    # file_name = file_name_format % "unitsOnly_ManuallyMappedConceptVars_7.17.19.csv"
-    # corpus_builder = CorpusBuilder(["units_1"])
-    # calc.init_cache(file_name)
-    # scored_units = calc.score_variables(corpus_builder)
-    # # len(scored_units)
-    #
-    # score_name = "score_descUnits"
-    # file_name = file_name_format % "descUnits_ManuallyMappedConceptVars_7.17.19.csv"
-    # corpus_builder = CorpusBuilder(["var_desc_1", "units_1"])
-    # calc.init_cache(file_name)
-    # scored_desc_units = calc.score_variables(corpus_builder)
-    # # len(scored_desc_coding)  # 4013114
-    #
-    # score_name = "score_descCoding"
-    # file_name = file_name_format % "descCoding_ManuallyMappedConceptVars_7.17.19.csv"
-    # corpus_builder = CorpusBuilder(["var_desc_1", "var_coding_labels_1"])
-    # calc.init_cache(file_name)
-    # scored_desc_coding = calc.score_variables(corpus_builder)
-    # # len(scored_desc_coding)  # 4013114
-    #
-    # score_name = "score_descCodingUnits"
-    # file_name = file_name_format % "descCodingUnits_ManuallyMappedConceptVars_7.17.19.csv"
-    # corpus_builder = CorpusBuilder(["var_desc_1", "units_1", "var_coding_labels_1"])
-    # calc.init_cache(file_name)
-    # scored_desc_coding_units = calc.score_variables(corpus_builder)
-    # len(scored_full) #scored_desc_lab
-
-    # Merge scores files and write to merged file- CURRENTLY "SCORED" data frame is not returned
-    # from score_variables-so merged code below will not work with this code.
-    # ##############################################################################
-    # scored_merged = merge_score_results(scored, scored_coding, "outer")
-    # scored_merged = merge_score_results(scored_merged, scored_units, "outer")
-    # scored_merged = merge_score_results(scored_merged, scored_desc_units, "outer")
-    # scored_merged = merge_score_results(scored_merged, scored_desc_coding, "outer")
-    # scored_merged = merge_score_results(scored_merged, scored_desc_coding_units, "outer")
-
-    # scored_merged.to_csv(file_name_format % "All_Scores", sep=",", encoding="utf-8", index=False, line_terminator="\n")
 
 
 if __name__ == "__main__":
     main()
-
-    varDocFile = "tiff_laura_shared/FHS_CHS_ARIC_MESA_varDoc_dbGaPxmlExtract_timeIntervalAdded_May19_NLPversion.csv"
-    manualMappedVarsFile = "data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv"
-    # READ IN DATA -- 07.17.19
-    testData = pd.read_csv(varDocFile, sep=",", quotechar='"', na_values="",
-                           low_memory=False)  # when reading in data, check
-    #  to see if there is "\r" if # not then don't use "lineterminator='\n'", otherwise u

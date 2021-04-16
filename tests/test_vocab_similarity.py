@@ -37,8 +37,8 @@ class TestVariableSimilarityCalculator(TestCase):
                                  ('gender', 'race', 0.1188),
                                  ('sex', 'gender', 0.1474),
                                  ('sex', 'race', 0.1104)],
-                                columns= ['reference var', 'paired var', 'score'])
-        assert(result.equals(expected))
+                                columns=['reference var', 'paired var', 'score'])
+        assert (result.equals(expected))
 
     def test_score_docs_out_of_order(self):
         # corpora = [[('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain',
@@ -92,27 +92,15 @@ class TestVariableSimilarityCalculator(TestCase):
 
         assert result == expected
 
-    def test_init_cache(self):
-        self.fail()
-
-    def test_append_cache(self):
-        self.fail()
-
-    def test_finalize_cached_output(self):
-        self.fail()
-
-    def test_cache_sim_scores(self):
-        self.fail()
-
     def test_score_variables(self):
         v = VariableSimilarityCalculator(['race'])
         corpora = [
             [('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic', 'common',
                        'owing', 'common', 'inheritance']),
              ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']),
-             ('sex',
-              ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad',
-               'individual']), ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
+             ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete', 'gonad',
+                      'individual']),
+             ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]]
         m = np.array([[0., 0., 0.29, 0., 0., 0.23, 0.29, 0., 0., 0., 0.29,
                        0.29, 0., 0., 0., 0., 0., 0., 0.19, 0.23, 0., 0.,
                        0., 0.29, 0.59, 0.29, 0.],
@@ -126,7 +114,7 @@ class TestVariableSimilarityCalculator(TestCase):
                        0., 0., 0.45, 0.45, 0., 0.45, 0.45, 0., 0., 0., 0.,
                        0., 0., 0., 0., 0.]])
 
-        result = v.score_docs(corpora, m, num_cpus=2)
+        result = v.score_docs(corpora, m)
 
         expected = np.array([['race', 'gender', 0.1188],
                              ['race', 'sex', 0.1104],
@@ -134,43 +122,9 @@ class TestVariableSimilarityCalculator(TestCase):
 
         assert (result.values == expected).all()
 
-    def test_variable_similarity(self):
-        # v = VariableSimilarityCalculator(['x'])
-        # v.variable_similarity()
-        self.fail()
-
     def test_filter_scores(self):
-        v = VariableSimilarityCalculator(['x'])
-
         scores = [(1, 0.1188), (2, 0.1104), (3, 0)]
 
         result = list(filter_scores([], identity, scores, 'x'))
 
         assert result == scores
-
-
-class Test(TestCase):
-    def test_merge_score_results(self):
-        self.fail()
-
-    def test_partition(self):
-        self.fail()
-
-    def test_vals_differ_in_col(self):
-        self.fail()
-
-    def test_vals_differ_in_all_cols(self):
-        self.fail()
-
-    def test_val_in_any_row_for_col(self):
-        self.fail()
-
-    def test_select_top_sims(self):
-        self.fail()
-
-    def test_select_top_sims_by_group(self):
-        self.fail()
-
-
-
-
