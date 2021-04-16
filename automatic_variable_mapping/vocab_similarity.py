@@ -88,41 +88,27 @@ class VariableSimilarityCalculator:
     #         self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
     #     print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
-    def score_docs(self, corpora, doc_vectors, num_cpus=None):
+    def score_docs(self, doc_ids, doc_vectors):
         """
         The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
         with a score, for each variable as a pandas data frame.
 
+        1. Consolidate all ref_ids that need to be mapped
+        2. Subset tfidf matrix accordingly
+        3. In a single matrix multiplication operation, calculate cosine similarity between proposed tfidf submatrix and the whole tfidf matrix
+        4. Re-map ref_ids to cosine-similarity matrix
+
         :return: pandas data frame of the top_n (as specified by user) results for each variable
         """
-
-        # cache = init_cache_output(None, "pandas", file_name)
-
-        doc_ids = [doc_id for corpus in corpora for doc_id, _ in corpus]
-
-        # TODO HPL:
-        # run on GPU
-        # 1. Consolidate all ref_ids that need to be mapped
-        # 2. Subset tfidf matrix accordingly
-        # 3. In a single matrix multiplication operation, calculate cosine similarity between proposed tfidf submatrix and the whole tfidf matrix
-        # 4. Re-map ref_ids to cosine-similarity matrix
-
-        # print " Finding valid ref ids"
-        corpus_ref_idx_to_ref_id = {}
-        for ref_id in self.ref_ids:
-            ref_id = str(ref_id)
-            # get index of filter data in corpus
-            ref_doc_idx = doc_ids.index(ref_id)
-            if ref_doc_idx >= 0:
-                corpus_ref_idx_to_ref_id[ref_doc_idx] = ref_id
 
         # n = number of refs to find matches for
         # m = size of embeddings
         # k = number of possible ref matches
         # length n
-        ref_doc_indices = list(set(corpus_ref_idx_to_ref_id.keys()))
         # [n, m]
-        sub_vectors = doc_vectors[ref_doc_indices]
+        ref_id_indices = [doc_ids.index(ref_id) for ref_id in self.ref_ids]
+        ref_id_indices.sort()
+        sub_vectors = doc_vectors[ref_id_indices]
         # tfidf has shape [m, k]
         # [n, m] X [m, k] = [n, k]
         # print " Calculating Similarity Scores"
@@ -130,11 +116,10 @@ class VariableSimilarityCalculator:
 
         cache = list()
         # print " Getting Pairings for Ref IDs"
-        for i, ref_doc_idx in enumerate(ref_doc_indices):
+        for ref_id_idx, similarities_vec in zip(ref_id_indices, cosine_similarities):
             # print "Finding matches for", ref_doc_idx
-            similarities_vec = cosine_similarities[i]
-            ref_id = corpus_ref_idx_to_ref_id[ref_doc_idx]
-            paired_doc_indices = [i for i in similarities_vec.argsort()[::-1] if i != ref_doc_idx]
+            ref_id = doc_ids[ref_id_idx]
+            paired_doc_indices = [i for i in similarities_vec.argsort()[::-1] if i !=  ref_id_idx]
             ref_doc_scores = [(paired_doc_idx, similarities_vec[paired_doc_idx]) for paired_doc_idx in paired_doc_indices]
             ref_doc_scores = self.select_scores(ref_doc_scores)
             ref_doc_scores = filter_scores(self.ref_ids, self.pairable, ref_doc_scores, ref_id)

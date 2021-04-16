@@ -62,7 +62,8 @@ def doc_similarity(data_file, doc_cols, ref_id_col, filter_file=None, word_vecto
     # calculate similarity scores
     print(" Calculating Similarity Scores...")
     scores = vocab_similarity.VariableSimilarityCalculator(filter_data[ref_id_col], pairable=default_pairable)
-    result = scores.score_docs(corpora, doc_vectors)
+    doc_ids = list(set([doc_id for corpus in corpora for doc_id, _ in corpus]))
+    result = scores.score_docs(doc_ids, doc_vectors)
     return(result)
 
 def calc_scores_doc_cols(data_file, doc_cols_input, ref_id_col, filter_file,  word_vectors=None, corpora_col=None):
