@@ -112,6 +112,46 @@ class TestCorpusBuilder(TestCase):
 
         assert (np.around(tfidf_matrix.todense(), decimals=2) == m).all()
 
+    def test_calc_doc_embeddings(self):
+        # corpora = [[('race', ['race',  'describing',  'individual']),
+        #             ('gender', ['gender', 'or', 'sex', 'describing', 'self', 'gend1'])
+        #            ]]
+        # same as calling: vocab, bow_matrix = corpus.calc_tfidf(corpora)
+        vocab = ['race', 'describing', 'gender', 'self', 'sex', 'individual', 'or', 'gend1']
+        bow_matrix = [[0.6316672, 0.44943642, 0., 0., 0., 0.6316672, 0., 0.],
+                      [0., 0.30321606, 0.4261596, 0.4261596, 0.4261596, 0.4261596, 0., 0.4261596]]
+
+        word_vecs = {
+            'race': np.array([0.43838999, -0.30252999, 0.87002999], dtype=np.float32),
+            'describing': np.array([0.27838001, -0.33434999, -0.086761], dtype=np.float32),
+            'gender': np.array([0.66943002, -0.54661, 0.87055999], dtype=np.float32),
+            'self': np.array([0.63867998, 0.041965, 0.22407], dtype=np.float32),
+            'sex': np.array([0.51067001, 0.56326002, 0.75374001], dtype=np.float32),
+            'individual': np.array([-0.15588,  0.16461, -0.20387], dtype=np.float32),
+            'or': np.array([0.12931, -0.19647001, 0.30704001], dtype=np.float32),
+            'patient': np.array([0.15424, -0.60957998, 0.57064003], dtype=np.float32),
+            'participant': np.array([0.23707999, -0.16868, 0.06024], dtype=np.float32)
+        }
+        kv = KeyedVectors(3)
+        kv.add(word_vecs.keys(), word_vecs.values())
+        doc1_vec = np.matmul(np.array([0.6316672, 0.44943642, 0., 0., 0., 0.6316672, 0., 0.]),
+                             np.array([[0.43838999, -0.30252999, 0.87002999],
+                                       [0.27838001, -0.33434999, -0.086761],
+                                       [0.66943002, -0.54661, 0.87055999],
+                                       [0.63867998, 0.041965, 0.22407],
+                                       [0.51067001, 0.56326002, 0.75374001],
+                                       [-0.15588,  0.16461, -0.20387],
+                                       [0.12931, -0.19647001, 0.30704001],
+                                       [0.0, -0.0, 0.0]], dtype=np.float32)
+                             )
+
+        doc_vecs = corpus.calc_doc_embeddings(bow_matrix, vocab, kv)
+        assert (doc_vecs.shape == (2, 3))
+        assert (np.around(doc1_vec, decimals = 5) == np.around(doc_vecs[0], decimals = 5)).all()
+        # sum of tfidf for doc 1 * first word vec element in each word doc 1 =  0.6196576197788882 (which is: 0.6316672*0.43838999 + 0.44943642*0.27838001 + 0.6316672*-0.15588)
+        assert (np.around(doc_vecs[0][0], decimals=5) == 0.30357)
+
+
     def test_build_corpora(self):
         data = pd.DataFrame({
             'documentation': [
