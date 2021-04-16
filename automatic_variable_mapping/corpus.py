@@ -1,5 +1,6 @@
 from nltk import RegexpTokenizer, WordNetLemmatizer
 from nltk.corpus import stopwords
+import numpy as np
 import multiprocessing
 from functools import partial
 import tqdm
@@ -39,17 +40,31 @@ def calc_tfidf(corpora, vocabulary=None):
     # CREATE MATRIX AND VECTORIZE DATA
     corpora = [[doc for _, doc in corpus] for corpus in corpora]
     tf.fit(corpora)
-    return tf.transform(corpus_all)
+    return tf.vocabulary, tf.transform(corpus_all)
+
+def calc_doc_embeddings(bow_matrix, vocab, word_vectors):
+    """
+    :param corpora:
+    :param word_vectors:
+    :param tfidf_vocab:
+    :return:
+    """
+    # set(vocab).difference(set(word_embeddings.index2word))
+    embedding_matrix = [word_vectors[word] if word in word_vectors else np.zeros(word_vectors.vector_size) for
+                        word in vocab]
+    doc_embeddings = np.matmul(bow_matrix, np.array(embedding_matrix))
+    return doc_embeddings
+
 
 def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
-    """Using a list of dataframes, create a corpus for each dataframe in the list c
+    """Using a list of dataframes, create a corpus for each dataframe in the list
+    :param doc_col: list with column name(s) in corpora data that should be considered as a document
     :param id_col: column name of uniqueIDs for documents in the dataframe
     :param corpora_data: a list of dataframes containing the data to be turned into a corpus. Each dataframe in the list
     should have a unique ID that is universal to all dataframes in the list and should have the same doc_cols/id_col names
     :return a list, where each item is the lists of lists returned from build_corpus.
     Build_corpus returns a list of lists where the first item of each list contains the identifier and the
     second item contains the a list containing the processed text for each document/row in the corpus"""
-
     return [build_corpus(doc_col, corpus_data, id_col, num_cpus=num_cpus) for corpus_data in corpora_data]
 
 def all_docs(corpora):
