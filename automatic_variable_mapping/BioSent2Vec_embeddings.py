@@ -1,5 +1,4 @@
-from gensim.models import KeyedVectors, FastText
-import fasttext
+from gensim.models import KeyedVectors
 import numpy as np
 
 def convert_to_keyedvectors(input_file_name, output_file_name):
@@ -21,9 +20,9 @@ binary_file_name = vec_file_dir  + "BioWordVec_PubMed_MIMICIII_d200.vec.bin"
 #binary_model_file_name = vec_file_dir  + "BioWordVec_PubMed_MIMICIII_d200.bin"
 #vector_file_name =  vec_file_dir  + "bio-word-vectors.vec"
 
-#wouldn't save .vec file on full embedding file (limit = None)
-#convert_to_keyedvectors(binary_file_name, vector_file_name)
-word_embeddings = KeyedVectors.load_word2vec_format(binary_file_name, binary=True, limit=10)#fasttext.load_model(binary_model_file_name)#
+
+#convert_to_keyedvectors(binary_file_name, vector_file_name) #wouldn't save .vec file on full embedding file (limit = None), so didn't use load_keyed_vectors
+word_embeddings = KeyedVectors.load_word2vec_format(binary_file_name, binary=True, limit=10)
 
 
 #develop embedding pipeline for doc sentences

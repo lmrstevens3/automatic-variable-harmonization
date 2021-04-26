@@ -1,16 +1,20 @@
 import os
 from unittest import TestCase
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-
 from automatic_variable_mapping import corpus
+from automatic_variable_mapping.vocab_similarity import partition
 
 import pandas as pd
 import numpy as np
-import multiprocessing
-from gensim.models import KeyedVectors, FastText
+from numpy import linalg as la
 
-from automatic_variable_mapping.vocab_similarity import partition
+from sklearn.feature_extraction.text import TfidfVectorizer
+from gensim.models import KeyedVectors
+
+import multiprocessing
+
+
+
 
 
 class TestCorpusBuilder(TestCase):
@@ -55,7 +59,7 @@ class TestCorpusBuilder(TestCase):
         data = pd.read_csv(file_path, sep=",", quotechar='"', na_values="", low_memory=False)
         data.var_desc_1 = data.var_desc_1.fillna("")
 
-        corpora_data = partition(data, 'study_1')
+        # corpora_data = partition(data, 'study_1')
 
         # id_col = "varDocID_1"
         # doc_col = ["var_desc_1"]
@@ -128,7 +132,7 @@ class TestCorpusBuilder(TestCase):
             'gender': np.array([0.66943002, -0.54661, 0.87055999], dtype=np.float32),
             'self': np.array([0.63867998, 0.041965, 0.22407], dtype=np.float32),
             'sex': np.array([0.51067001, 0.56326002, 0.75374001], dtype=np.float32),
-            'individual': np.array([-0.15588,  0.16461, -0.20387], dtype=np.float32),
+            'individual': np.array([-0.15588, 0.16461, -0.20387], dtype=np.float32),
             'or': np.array([0.12931, -0.19647001, 0.30704001], dtype=np.float32),
             'patient': np.array([0.15424, -0.60957998, 0.57064003], dtype=np.float32),
             'participant': np.array([0.23707999, -0.16868, 0.06024], dtype=np.float32)
@@ -136,22 +140,24 @@ class TestCorpusBuilder(TestCase):
         kv = KeyedVectors(3)
         kv.add(word_vecs.keys(), word_vecs.values())
         doc1_vec = np.matmul(np.array([0.6316672, 0.44943642, 0., 0., 0., 0.6316672, 0., 0.]),
-                             np.array([[0.43838999, -0.30252999, 0.87002999],
-                                       [0.27838001, -0.33434999, -0.086761],
-                                       [0.66943002, -0.54661, 0.87055999],
-                                       [0.63867998, 0.041965, 0.22407],
-                                       [0.51067001, 0.56326002, 0.75374001],
-                                       [-0.15588,  0.16461, -0.20387],
-                                       [0.12931, -0.19647001, 0.30704001],
-                                       [0.0, -0.0, 0.0]], dtype=np.float32)
-                             )
+                             np.array([[0.42973992, -0.29656065, 0.85286301],
+                                       [0.62749654, -0.75365853, -0.19556803],
+                                       [0.54571605, -0.44559374, 0.70967621],
+                                       [0.94180453, 0.06188205, 0.33041608],
+                                       [0.47699729, 0.52611959, 0.70403963],
+                                       [-0.51126611, 0.53989935, -0.66866702],
+                                       [0.3343285, -0.50796938, 0.79384601],
+                                       [0.0, 0.0, 0.0]], dtype=np.float32))
+        doc1_vec /= la.norm(doc1_vec, keepdims=True)
 
         doc_vecs = corpus.calc_doc_embeddings(bow_matrix, vocab, kv)
         assert (doc_vecs.shape == (2, 3))
-        assert (np.around(doc1_vec, decimals = 5) == np.around(doc_vecs[0], decimals = 5)).all()
-        # sum of tfidf for doc 1 * first word vec element in each word doc 1 =  0.6196576197788882 (which is: 0.6316672*0.43838999 + 0.44943642*0.27838001 + 0.6316672*-0.15588)
-        assert (np.around(doc_vecs[0][0], decimals=5) == 0.30357)
-
+        assert (np.around(doc1_vec, decimals=5) == np.around(doc_vecs[0], decimals=5)).all()
+        # sum of tfidf for doc 1 * first normalized word vec element of each word in doc 1 normalized = 0.7762977008161426
+        #   which is: 0.6316672*0.42973992 + 0.44943642*0.62749654 + 0.6316672*-0.51126611 /
+        #                              np.sqrt(0.23052238* 0.23052238 + -0.18501252*-0.18501252 + 0.02845518*0.02845518)
+        #   [ 0.23052238, -0.18501252,  0.02845518] is vector of tfidf for doc 1 * first word vec element in each word doc 1
+        assert (np.around(doc_vecs[0][0], decimals=5) == 0.7763)
 
     def test_build_corpora(self):
         data = pd.DataFrame({
@@ -213,12 +219,9 @@ class TestCorpusBuilder(TestCase):
 
         result = corpus.build_corpus(doc_col, data, 'id', num_cpus=multiprocessing.cpu_count())
 
-        assert result == [
-            ('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain', 'characteristic',
-                      'common', 'owing', 'common', 'inheritance']), ('gender',
-                                                                     ['gender', 'variable', 'describing', 'self',
-                                                                      'identified', 'category', 'basis', 'sex']),
-            ('sex',
-             ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete',
-              'gonad', 'individual']),
-            ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]
+        assert result == [('race', ['race', 'variable', 'describing', 'group', 'individual', 'certain',
+                                     'characteristic','common', 'owing', 'common', 'inheritance']),
+                          ('gender', ['gender', 'variable', 'describing', 'self', 'identified', 'category', 'basis', 'sex']),
+                          ('sex', ['sex', 'variable', 'descriptive', 'biological', 'characterization', 'based', 'gamete',
+                                   'gonad', 'individual']),
+                          ('ethnicity', ['affiliation', 'due', 'shared', 'cultural', 'background'])]

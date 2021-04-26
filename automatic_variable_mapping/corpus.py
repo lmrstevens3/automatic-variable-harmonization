@@ -1,6 +1,7 @@
 from nltk import RegexpTokenizer, WordNetLemmatizer
 from nltk.corpus import stopwords
 import numpy as np
+from numpy import linalg as la
 import multiprocessing
 from functools import partial
 import tqdm
@@ -11,7 +12,7 @@ tokenizer = RegexpTokenizer(r"\w+")
 lemmatizer = WordNetLemmatizer()
 
 
-def lemmatize_variable_documentation(doc_text):  # TODO See if var really needs to be passed here
+def lemmatize_variable_documentation(doc_text):
     # if doc_col is multiple columns,  concatenate text from all columns
     doc = " ".join([str(col) for col in doc_text])
 
@@ -48,16 +49,21 @@ def calc_tfidf(corpora, vocabulary=None):
 
 def calc_doc_embeddings(bow_matrix, vocab, word_vectors):
     """
-    :param vocab:
-    :param bow_matrix:
-    :param word_vectors:
-    :return:
+    :param vocab: a list of unique words in the bow_matrix to extract embeddings for
+    :param bow_matrix: a bag of words matrix representing the words in the corpora
+    :param word_vectors: a genism keyed vectors object containing word embeddings
+    :return: a matrix of normalized doc embeddings (n docs X n embedding's dimension)
     """
     # set(vocab).difference(set(word_embeddings.index2word))
-    embedding_matrix = [word_vectors[word] if word in word_vectors else np.zeros(word_vectors.vector_size) for
-                        word in vocab]
-    doc_embeddings = np.matmul(bow_matrix, np.array(embedding_matrix))
+    embedding_matrix = np.array([normalize_doc_vectors(word_vectors[word], axis=None)
+                                 if word in word_vectors else np.zeros(word_vectors.vector_size) for word in vocab])
+    doc_embeddings = normalize_doc_vectors(np.matmul(bow_matrix, embedding_matrix), axis=1)
     return doc_embeddings
+
+
+def normalize_doc_vectors(doc_vectors_matrix, axis):
+    norms = la.norm(doc_vectors_matrix, axis=axis, keepdims=True)
+    return doc_vectors_matrix / norms
 
 
 def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):

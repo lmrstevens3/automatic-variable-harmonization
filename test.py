@@ -20,7 +20,6 @@ corpora = corpus.build_corpora([doc_col], [data], ref_id_col)
 tfidf_matrix = corpus.calc_tfidf(corpora)
 
 v = vocab_similarity.VariableSimilarityCalculator(data[ref_id_col])
-v.init_cache()
 result = v.score_docs(corpora, tfidf_matrix)
 
 
@@ -82,7 +81,7 @@ ref_var_scores3 = list(vocab_similarity.filter_scores(v.ref_ids, v.pairable, ref
 
 print(ref_var_scores3[0])
 [append_cache(v.score_cols, ref_id, corpora[i][0], score) for i, score in ref_var_scores3]
-cache.append(vocab_similarity.cache_sim_scores(v.score_cols, corpora, ref_id, ref_var_scores3))
+cache.append(vocab_similarity.cache_sim_scores(corpora, ref_id, ref_var_scores3))
 # ###
 
 cache = list()
@@ -94,7 +93,7 @@ for i, corpus_ref_idx in enumerate(ids_to_subset):
     # TODO HPL: Need to fix select_scores
     ref_var_scores = v.select_scores(ref_var_scores)
     ref_var_scores = vocab_similarity.filter_scores(v.ref_ids, v.pairable, ref_var_scores, ref_id)
-    cache.append(vocab_similarity.cache_sim_scores(v.score_cols, corpora, ref_id, ref_var_scores))
+    cache.append(vocab_similarity.cache_sim_scores(corpora, ref_id, ref_var_scores))
 
 cache2 = [y for x in cache for y in x]
 
