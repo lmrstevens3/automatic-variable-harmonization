@@ -4,7 +4,7 @@ import multiprocessing
 from functools import partial
 import tqdm
 
-from tfidf import CorporaTfidfVectorizer
+from automatic_variable_mapping.tfidf import CorporaTfidfVectorizer
 
 tokenizer = RegexpTokenizer(r"\w+")
 lemmatizer = WordNetLemmatizer()

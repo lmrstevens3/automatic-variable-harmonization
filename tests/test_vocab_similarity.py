@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 import numpy as np
+import scipy.sparse as sp
 
 from automatic_variable_mapping.vocab_similarity import VariableSimilarityCalculator, calculate_similarity, filter_scores, identity
 
@@ -43,6 +44,7 @@ class TestVariableSimilarityCalculator(TestCase):
                        0., 0., 0.,
                        0., 0., 0.,
                        0., 0., 0.]])
+        m = sp.csc_matrix(m)
         result = calculate_similarity(m, 0)
         expected = [(1, 0.1188),
                     (2, 0.1104),
@@ -108,7 +110,9 @@ class TestVariableSimilarityCalculator(TestCase):
                        0., 0., 0.,
                        0., 0., 0.]])
 
-        result = v.score_variables(corpora[0], m, num_cpus=2)
+        m = sp.csr_matrix(m)
+
+        result = v.score_variables(corpora[0], m)
 
         expected = np.array([['race', 'gender', 0.1188],
                              ['race', 'sex', 0.1104],
