@@ -74,10 +74,8 @@ class VariableSimilarityCalculator:
         self.file_name = None
 
     def init_cache(self, file_name=None):
-        self.file_name = file_name
-        self.cache = pd.DataFrame([], columns=list(self.score_cols))
-        if self.file_name:
-            with open(self.file_name, "w") as f:
+        if file_name:
+            with open(file_name, "w") as f:
                 f.write(",".join(self.score_cols))
                 f.write("\n")
 
@@ -86,7 +84,7 @@ class VariableSimilarityCalculator:
     #         self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
     #     print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
 
-    def score_variables(self, corpora, tfidf, pair_ids=None, num_cpus=None):
+    def score_variables(self, corpora, tfidf, pair_ids=None, num_cpus=None, file_name=None):
         """
         The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
         with a score, for each variable as a pandas data frame.
@@ -156,18 +154,18 @@ class VariableSimilarityCalculator:
                     self.select_scores,
                     corpus_doc_ids,
                     corpus_pair_indices,
-                    cosine_similarities)
+                    cosine_similarities,
+                    file_name)
 
         cache = list(tqdm.tqdm(p.map(f, indices),
                                total=len(corpus_ref_indices)))
 
-        cache = [y for x in cache for y in x]
+        if not file_name:
+            cache = [y for x in cache for y in x]
+            result = pd.DataFrame(cache, columns=self.score_cols)
+            return result
 
-        result = pd.DataFrame(cache, columns=self.score_cols)
-
-        return result
-
-def score_finder_helper(ref_ids, pairable, score_cols, select_scores, corpus_doc_ids, corpus_pair_indices, cosine_similarities, idx):
+def score_finder_helper(ref_ids, pairable, score_cols, select_scores, corpus_doc_ids, corpus_pair_indices, cosine_similarities, file_name, idx):
     col_idx, corpus_ref_idx = idx
     ref_id = corpus_doc_ids[corpus_ref_idx]
     similarities_vec = cosine_similarities[col_idx]
@@ -177,15 +175,15 @@ def score_finder_helper(ref_ids, pairable, score_cols, select_scores, corpus_doc
                       if corpus_doc_ids[corpus_pair_indices[row_idx]] != ref_id]
     ref_var_scores = select_scores(ref_var_scores)
     ref_var_scores = filter_scores(ref_ids, pairable, ref_var_scores, ref_id)
-    return cache_sim_scores(score_cols, ref_id, ref_var_scores)
+    return cache_sim_scores(score_cols, ref_id, ref_var_scores, file_name)
 
 def select_top_sims(similarities, n):
     # TODO HPL: This probably shouldn't be using a pandas dataframe
     return similarities[:n]
 
-def cache_sim_scores(score_cols, ref_id, ref_var_scores):
+def cache_sim_scores(score_cols, ref_id, ref_var_scores, file_name=None):
     # retrieve top_n pairings for reference
-    return [append_cache(score_cols, ref_id, pair_id, score) for pair_id, score in ref_var_scores]
+    return [append_cache(score_cols, ref_id, pair_id, score, file_name=file_name) for pair_id, score in ref_var_scores]
 
 
 def append_cache(score_cols, ref_doc_id, paired_doc_id, score, file_name=None):
