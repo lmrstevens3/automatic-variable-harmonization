@@ -158,7 +158,7 @@ class VariableSimilarityCalculator:
                     corpus_pair_indices,
                     cosine_similarities)
 
-        cache = list(tqdm.tqdm(p.imap(f, indices, 100),
+        cache = list(tqdm.tqdm(p.map(f, indices),
                                total=len(corpus_ref_indices)))
 
         cache = [y for x in cache for y in x]
