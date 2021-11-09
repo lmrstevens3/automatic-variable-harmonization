@@ -166,7 +166,6 @@ class VariableSimilarityCalculator:
             cache = list()
             for col_idx, corpus_ref_idx in enumerate(corpus_ref_indices):
                 ref_id = corpus_doc_ids[corpus_ref_idx]
-                print "Finding matches for", col_idx, corpus_ref_idx, ref_id
                 similarities_vec = cosine_similarities[col_idx]
                 # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
                 ref_var_scores = [(corpus_doc_ids[corpus_pair_indices[row_idx]], similarities_vec[row_idx])
