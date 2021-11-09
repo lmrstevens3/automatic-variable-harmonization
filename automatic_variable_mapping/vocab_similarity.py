@@ -16,11 +16,9 @@ import numpy as np
 import pandas as pd
 # noinspection PyProtectedMember
 from sklearn.metrics.pairwise import linear_kernel
+from itertools import izip
+import warnings
 
-
-# ssl certificates are failing on mac. Can check for files in ~/nltk_data and if not present then can try download or manually download and save to that location
-# nltk.download('stopwords')
-# nltk.download('wordnet')
 
 def calculate_similarity(tfidf_matrix, ref_doc_index):
     """
@@ -56,10 +54,11 @@ class VariableSimilarityCalculator:
     def __init__(self, ref_ids, pairable=identity, select_scores=scores_identity, score_cols=None):
         """
 
-        :param score_cols: object
-        :param select_scores:
-        :param ref_ids: an iterable containing variable information used to filter results
-        containing the processed question definition
+        :param score_cols: column names that should be used in the cache or the results returned
+        :param select_scores: a function to return a selection of ids for each ref_id input (ex. top n scored pairings)
+        :param ref_ids: an iterable containing reference, document ids in a corpora that should be paired and scored
+        against all other documents
+
         """
         if not score_cols:
             score_cols = ["reference_id", "paired_id", "score"]
@@ -91,60 +90,60 @@ class VariableSimilarityCalculator:
         # k = number of possible ref matches
         # length n
         # [n, m]
+        if doc_vectors.shape[0] != len(doc_ids):
+            doc_ids = doc_ids[0:doc_vectors.shape[0]]
+            warnings.warn("doc_ids and doc_vectors length aren't equal, only ref_ids/doc_ids with doc vectors are scored")
 
-        ref_id_indices = [doc_ids.index(ref_id) for ref_id in self.ref_ids]
+        ref_id_indices = [doc_ids.index(ref_id) for ref_id in self.ref_ids if ref_id in doc_ids]
         ref_id_indices.sort()
         sub_vectors = doc_vectors[ref_id_indices]
         # doc_vectors has shape [m, k]
         # [n, m] X [m, k] = [n, k]
         # cosine similarity = [n, m] X [m, k] (dot product), because tfidf matrix is l2 normalized (unit vectors) by default
-        # print " Calculating Similarity Scores"
+        # print "   Calculating Similarity Scores"
         cosine_similarities = np.matmul(doc_vectors, sub_vectors.transpose())
 
         if cache:
             with open(cache, "w") as f:
-                f.write(",".join(self.score_cols))
-                f.write("\n")
+                f.write(",".join(self.score_cols)+"\n")
         else:
             cache = []
 
-        # print " Getting Pairings for Ref IDs"
-        for ref_id_idx, similarities in zip(ref_id_indices, cosine_similarities.transpose()):
+        # print "   Getting Pairings for Ref IDs"
+        for ref_id_idx, similarities in izip(ref_id_indices, cosine_similarities.transpose()):
             # print "Finding matches for", ref_doc_idx
             ref_id = doc_ids[ref_id_idx]
             paired_doc_indices = [i for i in similarities.argsort()[::-1] if i != ref_id_idx]
-            ref_doc_scores = [(paired_doc_idx, similarities[paired_doc_idx]) for paired_doc_idx in paired_doc_indices]
+            ref_doc_scores = [(doc_ids[paired_doc_idx], similarities[paired_doc_idx]) for paired_doc_idx in paired_doc_indices]
             ref_doc_scores = self.select_scores(ref_doc_scores)
             ref_doc_scores = filter_scores(self.pairable, ref_doc_scores, ref_id)
-            cache_sim_scores(cache, self.score_cols, doc_ids, ref_id, ref_doc_scores)
+            cache_sim_scores(cache, self.score_cols, ref_id, ref_doc_scores)
+        if isinstance(cache, list):
+            cache = pd.DataFrame(cache, columns=self.score_cols)
+            return cache
 
-        result = pd.DataFrame(cache, columns=self.score_cols)
-        return result
 
-
-def cache_sim_scores(cache, score_cols, doc_ids, ref_id, ref_doc_scores):
+def cache_sim_scores(cache, score_cols, ref_id, ref_doc_scores):
     # add all pairing scores for ref_id of reference doc
-    for paired_doc_idx, score in ref_doc_scores:
-        paired_id = doc_ids[paired_doc_idx]
+    for paired_id, score in ref_doc_scores:
         data = [ref_id, paired_id, score]
         if isinstance(cache, list):
             cache.append(dict(zip(score_cols, data)))
         else:
             # Assume cache is a file to write to.
             with open(cache, "a") as f:
-                f.write(",".join(data))
-                f.write("\n")
+                f.write(",".join([str(val) for val in data])+"\n")
 
 
 def filter_scores(pairable, ref_doc_scores, ref_id):
-    return ((pair_id, score)
-            for pair_id, score in ref_doc_scores
-            if pairable(score, pair_id, ref_id))
+    return ((paired_id, score) for paired_id, score in ref_doc_scores
+            if pairable(score, paired_id, ref_id))
 
 
 # default pairable filters pairings with a score of 0 and self-pairings
-def default_pairable(score, pair_id, ref_id):
-    return score > 0 and pair_id != ref_id
+def default_pairable(score, paired_id, ref_id):
+    # checking paired_id != ref_id is checked in score_docs when
+    return score > 0 and paired_id != ref_id
 
 
 # additional pairable functions to be used with or instead of default_pairable
@@ -173,22 +172,9 @@ def select_top_sims(ref_doc_scores, n):
 
 
 # select top pairings by a particular class/group
-def select_top_sims_by_group(ref_doc_scores, n, doc_ids, id_group_dict):
-    scores_grps = [(paired_idx, score, id_group_dict[doc_ids[paired_idx]]) for paired_idx, score in ref_doc_scores
-                   if doc_ids[paired_idx] in id_group_dict.keys()]
+def select_top_sims_by_group(ref_doc_scores, n, id_group_dict):
+    scores_grps = [(paired_id, score, id_group_dict[paired_id]) for paired_id, score in ref_doc_scores
+                   if paired_id in id_group_dict.keys()]
     scores_groups = pd.DataFrame(scores_grps, columns=['paired_idx', 'score', 'group'])
     top_scores_groups = scores_groups.sort_values(['group', 'score'], ascending=False).groupby(by='group').head(n)
     return top_scores_groups[['paired_idx', 'score']].to_records(index=False).tolist()
-
-
-# function to partition corpora data to a list of corporas by a col specified
-def partition(data, by):
-    return [data[data[by] == col_value] for col_value in data[by].unique()]
-
-
-def main():
-    pass
-
-
-if __name__ == "__main__":
-    main()
