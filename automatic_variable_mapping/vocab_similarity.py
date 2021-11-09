@@ -92,47 +92,26 @@ class VariableSimilarityCalculator:
         :return: pandas data frame of the top_n (as specified by user) results for each variable
         """
 
-        # cache = init_cache_output(None, "pandas", file_name)
-
         corpus_doc_ids = [doc_id for doc_id, _ in corpora]
-
-        # TODO HPL:
-        # run on GPU
-        # 1. Consolidate all ref_ids that need to be mapped
-        # 2. Subset tfidf matrix accordingly
-        # 3. In a single matrix multiplication operation, calculate cosine similarity between proposed tfidf submatrix and the whole tfidf matrix
-        # 4. Re-map ref_ids to cosine-similarity matrix
 
         print "Finding valid pair ids"
 
         if pair_ids is None:
             pair_ids = corpus_doc_ids
 
-        corpus_pair_indices = list()
-        for pair_id in pair_ids:
-            pair_id = str(pair_id)
-            # get index of filter data in corpus
-            corpus_pair_idx = corpus_doc_ids.index(pair_id)
-            if corpus_pair_idx >= 0:
-                corpus_pair_indices.append(corpus_pair_idx)
+        corpus_pair_indices = [corpus_doc_ids.index(pair_id) for pair_id in pair_ids]
 
         print "Pair ids: " + str(len(corpus_pair_indices))
 
         print "Finding valid ref ids"
-        corpus_ref_indices = list()
-        for ref_id in self.ref_ids:
-            ref_id = str(ref_id)
-            # get index of filter data in corpus
-            corpus_ref_idx = corpus_doc_ids.index(ref_id)
-            if corpus_ref_idx >= 0:
-                corpus_ref_indices.append(corpus_ref_idx)
+        corpus_ref_indices = [corpus_doc_ids.index(ref_id) for ref_id in self.ref_ids]
 
         print "Ref ids: " + str(len(corpus_ref_indices))
 
         # n = number of refs to find matches for
         # m = size of embeddings
         # k = number of possible ref matches
-        # pair tfiidf has shape [n, m]
+        # pair tfidf has shape [n, m]
         # transposed ref tfidf has shape [m, k]
         # [n, m] X [m, k] = [n, k]
 
