@@ -52,17 +52,17 @@ class TestVariableSimilarityCalculator(TestCase):
 
         assert result == expected
 
-    def test_init_cache(self):
-        self.fail()
+    # def test_init_cache(self):
+    #     self.fail()
 
-    def test_append_cache(self):
-        self.fail()
+    # def test_append_cache(self):
+    #     self.fail()
 
-    def test_finalize_cached_output(self):
-        self.fail()
+    # def test_finalize_cached_output(self):
+    #     self.fail()
 
-    def test_cache_sim_scores(self):
-        self.fail()
+    # def test_cache_sim_scores(self):
+    #     self.fail()
 
     def test_score_variables(self):
         v = VariableSimilarityCalculator(['race'])
@@ -119,12 +119,14 @@ class TestVariableSimilarityCalculator(TestCase):
                              ['race', 'ethnicity', 0.0]],
                             dtype='object')
 
+        print result.values
+        print expected
         assert (result.values == expected).all()
 
-    def test_variable_similarity(self):
-        # v = VariableSimilarityCalculator(['x'])
-        # v.variable_similarity()
-        self.fail()
+    # def test_variable_similarity(self):
+    #     # v = VariableSimilarityCalculator(['x'])
+    #     # v.variable_similarity()
+    #     self.fail()
 
     def test_filter_scores(self):
         v = VariableSimilarityCalculator(['x'])
@@ -136,24 +138,24 @@ class TestVariableSimilarityCalculator(TestCase):
         assert result == scores
 
 
-class Test(TestCase):
-    def test_merge_score_results(self):
-        self.fail()
+# class Test(TestCase):
+#     def test_merge_score_results(self):
+#         self.fail()
 
-    def test_partition(self):
-        self.fail()
+#     def test_partition(self):
+#         self.fail()
 
-    def test_vals_differ_in_col(self):
-        self.fail()
+#     def test_vals_differ_in_col(self):
+#         self.fail()
 
-    def test_vals_differ_in_all_cols(self):
-        self.fail()
+#     def test_vals_differ_in_all_cols(self):
+#         self.fail()
 
-    def test_val_in_any_row_for_col(self):
-        self.fail()
+#     def test_val_in_any_row_for_col(self):
+#         self.fail()
 
-    def test_select_top_sims(self):
-        self.fail()
+#     def test_select_top_sims(self):
+#         self.fail()
 
-    def test_select_top_sims_by_group(self):
-        self.fail()
+#     def test_select_top_sims_by_group(self):
+#         self.fail()

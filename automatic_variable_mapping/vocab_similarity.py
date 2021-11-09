@@ -124,7 +124,7 @@ class VariableSimilarityCalculator:
 
             print "Finding valid pair ids"
 
-            if not pair_ids.any():
+            if pair_ids is None:
                 pair_ids = corpus_doc_ids
 
             corpus_pair_indices = list()
@@ -165,15 +165,13 @@ class VariableSimilarityCalculator:
 
             cache = list()
             for col_idx, corpus_ref_idx in enumerate(corpus_ref_indices):
-                print "Finding matches for", corpus_ref_idx
-                similarities_vec = cosine_similarities[col_idx]
                 ref_id = corpus_doc_ids[corpus_ref_idx]
+                print "Finding matches for", col_idx, corpus_ref_idx, ref_id
+                similarities_vec = cosine_similarities[col_idx]
                 # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
-                ref_var_scores = [(row_idx, similarities_vec[row_idx])
+                ref_var_scores = [(corpus_doc_ids[corpus_pair_indices[row_idx]], similarities_vec[row_idx])
                                   for row_idx in similarities_vec.argsort()[::-1]
-                                  if corpus_pair_indices[row_idx] != ref_id]
-                ref_var_scores = [(corpus_pair_indices[row_idx], score) for row_idx, score in ref_var_scores]
-                ref_var_scores = [(corpus_doc_ids[corpus_pair_idx], score) for corpus_pair_idx, score in ref_var_scores]
+                                  if corpus_doc_ids[corpus_pair_indices[row_idx]] != ref_id]
                 ref_var_scores = self.select_scores(ref_var_scores)
                 ref_var_scores = filter_scores(self.ref_ids, self.pairable, ref_var_scores, ref_id)
                 cache.append(cache_sim_scores(self.score_cols, ref_id, ref_var_scores))
