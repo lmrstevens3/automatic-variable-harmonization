@@ -215,7 +215,7 @@ def partition(data, by):
     return [data[data[by] == col_value] for col_value in data[by].unique()]
 
 def default_pairable(score, pair_id, ref_ids, ref_id):
-    return score >= 0 and pair_id != ref_id
+    return score > 0 and pair_id != ref_id
 
 
 def vals_differ_in_col(col):
