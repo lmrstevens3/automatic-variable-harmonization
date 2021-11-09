@@ -13,12 +13,11 @@
 # read in needed libraries
 import nltk
 import pandas as pd
-from progressbar import ProgressBar, FormatLabel, Percentage, Bar
 # noinspection PyProtectedMember
 from sklearn.metrics.pairwise import linear_kernel
 import numpy as np
 
-import multiprocessing
+import multiprocessing as mp
 from functools import partial
 import tqdm
 
@@ -147,17 +146,19 @@ class VariableSimilarityCalculator:
         cosine_similarities = np.matmul(ref_sub_tfidf, pair_sub_tfidf.transpose())
         print "Sim Matrix: " + str(cosine_similarities.shape)
 
-        p = multiprocessing.Pool(processes=num_cpus)
+        p = mp.pool.ThreadPool(processes=num_cpus)
 
-        cache = list(tqdm.tqdm(p.imap(partial(score_finder_helper,
-                                              self.ref_ids,
-                                              self.pairable,
-                                              self.score_cols,
-                                              self.select_scores,
-                                              corpus_doc_ids,
-                                              corpus_pair_indices,
-                                              cosine_similarities),
-                                      enumerate(corpus_ref_indices)),
+        indices = list(enumerate(corpus_ref_indices))
+        f = partial(score_finder_helper,
+                    self.ref_ids,
+                    self.pairable,
+                    self.score_cols,
+                    self.select_scores,
+                    corpus_doc_ids,
+                    corpus_pair_indices,
+                    cosine_similarities)
+
+        cache = list(tqdm.tqdm(p.imap(f, indices, 100),
                                total=len(corpus_ref_indices)))
 
         cache = [y for x in cache for y in x]
@@ -169,7 +170,6 @@ class VariableSimilarityCalculator:
 def score_finder_helper(ref_ids, pairable, score_cols, select_scores, corpus_doc_ids, corpus_pair_indices, cosine_similarities, idx):
     col_idx, corpus_ref_idx = idx
     ref_id = corpus_doc_ids[corpus_ref_idx]
-    print "Finding matches for", col_idx, corpus_ref_idx, ref_id
     similarities_vec = cosine_similarities[col_idx]
                 # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
     ref_var_scores = [(corpus_doc_ids[corpus_pair_indices[row_idx]], similarities_vec[row_idx])
