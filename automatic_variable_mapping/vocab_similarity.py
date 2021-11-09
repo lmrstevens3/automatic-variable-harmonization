@@ -163,31 +163,18 @@ class VariableSimilarityCalculator:
             cosine_similarities = np.matmul(ref_sub_tfidf, pair_sub_tfidf.transpose())
             print "Sim Matrix: " + str(cosine_similarities.shape)
 
-            cache = list()
-            for col_idx, corpus_ref_idx in enumerate(corpus_ref_indices):
-                ref_id = corpus_doc_ids[corpus_ref_idx]
-                #print "Finding matches for", col_idx, corpus_ref_idx, ref_id
-                similarities_vec = cosine_similarities[col_idx]
-                # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
-                ref_var_scores = [(corpus_doc_ids[corpus_pair_indices[row_idx]], similarities_vec[row_idx])
-                                  for row_idx in similarities_vec.argsort()[::-1]
-                                  if corpus_doc_ids[corpus_pair_indices[row_idx]] != ref_id]
-                ref_var_scores = self.select_scores(ref_var_scores)
-                ref_var_scores = filter_scores(self.ref_ids, self.pairable, ref_var_scores, ref_id)
-                cache.append(cache_sim_scores(self.score_cols, ref_id, ref_var_scores))
+            p = multiprocessing.Pool(processes=num_cpus)
 
-            # p = multiprocessing.Pool(processes=num_cpus)
-
-            # cache = list(tqdm.tqdm(p.imap(partial(score_finder_helper,
-            #                                       self.score_cols,
-            #                                       self.ref_ids,
-            #                                       self.pairable,
-            #                                       self.select_scores,
-            #                                       corpus_doc_ids,
-            #                                       tfidf,
-            #                                       corpora),
-            #                               self.ref_ids),
-            #                        total=len(self.ref_ids)))
+            cache = list(tqdm.tqdm(p.imap(partial(score_finder_helper,
+                                                  self.ref_ids,
+                                                  self.pairable,
+                                                  self.score_cols,
+                                                  self.select_scores,
+                                                  corpus_doc_ids,
+                                                  corpus_pair_indices,
+                                                  cosine_similarities),
+                                          enumerate(corpus_ref_indices)),
+                                   total=len(corpus_ref_indices)))
 
             cache = [y for x in cache for y in x]
 
@@ -195,17 +182,18 @@ class VariableSimilarityCalculator:
 
         return result
 
-# def score_finder_helper(corpus_doc_ids, corpus_pair_indices, cosine_similarities, col_idx, corpus_ref_idx):
-#     ref_id = corpus_doc_ids[corpus_ref_idx]
-#     print "Finding matches for", col_idx, corpus_ref_idx, ref_id
-#     similarities_vec = cosine_similarities[col_idx]
-#                 # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
-#     ref_var_scores = [(corpus_doc_ids[corpus_pair_indices[row_idx]], similarities_vec[row_idx])
-#                       for row_idx in similarities_vec.argsort()[::-1]
-#                       if corpus_doc_ids[corpus_pair_indices[row_idx]] != ref_id]
-#     ref_var_scores = self.select_scores(ref_var_scores)
-#     ref_var_scores = filter_scores(self.ref_ids, self.pairable, ref_var_scores, ref_id)
-#     cache.append(cache_sim_scores(self.score_cols, ref_id, ref_var_scores))
+def score_finder_helper(ref_ids, pairable, score_cols, select_scores, corpus_doc_ids, corpus_pair_indices, cosine_similarities, idx):
+    col_idx, corpus_ref_idx = idx
+    ref_id = corpus_doc_ids[corpus_ref_idx]
+    print "Finding matches for", col_idx, corpus_ref_idx, ref_id
+    similarities_vec = cosine_similarities[col_idx]
+                # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
+    ref_var_scores = [(corpus_doc_ids[corpus_pair_indices[row_idx]], similarities_vec[row_idx])
+                      for row_idx in similarities_vec.argsort()[::-1]
+                      if corpus_doc_ids[corpus_pair_indices[row_idx]] != ref_id]
+    ref_var_scores = select_scores(ref_var_scores)
+    ref_var_scores = filter_scores(ref_ids, pairable, ref_var_scores, ref_id)
+    return cache_sim_scores(score_cols, ref_id, ref_var_scores)
 
 def select_top_sims(similarities, n):
     # TODO HPL: This probably shouldn't be using a pandas dataframe
