@@ -79,12 +79,7 @@ class VariableSimilarityCalculator:
                 f.write(",".join(self.score_cols))
                 f.write("\n")
 
-    # def finalize_cached_output(self):
-    #     if not self.file_name:
-    #         self.cache.to_csv(self.file_name, sep=",", encoding="utf-8", index=False, line_terminator="\n")
-    #     print '\n' + self.file_name + " written"  # " scored size:" + str(len(scored))  # 4013114
-
-    def score_variables(self, corpora, tfidf, pair_ids=None, num_cpus=None, file_name=None):
+    def score_variables(self, corpora, tfidf, pair_ids=None, num_cpus=1, file_name=None):
         """
         The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
         with a score, for each variable as a pandas data frame.
