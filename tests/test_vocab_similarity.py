@@ -112,7 +112,7 @@ class TestVariableSimilarityCalculator(TestCase):
 
         m = sp.csr_matrix(m)
 
-        result = v.score_variables(corpora[0], m)
+        result = v.score_variables(corpora[0], m, num_cpus=2)
 
         expected = np.array([['race', 'gender', 0.1188],
                              ['race', 'sex', 0.1104],
