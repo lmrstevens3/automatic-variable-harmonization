@@ -12,5 +12,5 @@ dependencies:
   - jupyter
   - backports.functools_lru_cache
   - tqdm
+  - gensim
 prefix: /home/harrisonpl/.conda/envs/avm2
-

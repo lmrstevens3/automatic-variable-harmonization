@@ -214,9 +214,6 @@ def merge_score_results(score_matrix1, score_matrix2, how):
     return scored_merged
 
 
-def partition(data, by):
-    return [data[data[by] == col_value] for col_value in data[by].unique()]
-
 def default_pairable(score, pair_id, ref_ids, ref_id):
     return score > 0 and pair_id != ref_id
 
