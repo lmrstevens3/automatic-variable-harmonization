@@ -3,6 +3,9 @@ from nltk.corpus import stopwords
 import multiprocessing
 from functools import partial
 import tqdm
+import warnings
+from numpy import linalg as la
+import numpy as np
 
 from automatic_variable_mapping.tfidf import CorporaTfidfVectorizer
 
@@ -40,6 +43,31 @@ def calc_tfidf(corpora, vocabulary=None):
     corpora = [[doc for _, doc in corpus] for corpus in corpora]
     tf.fit(corpora)
     return tf.transform(corpus_all)
+
+
+def calc_doc_embeddings(bow_matrix, vocab, word_vectors):
+    """
+    :param vocab: a list of unique words in the bow_matrix to extract embeddings for
+    :param bow_matrix: a bag of words matrix representing the words in the corpora (full matrix, not sparse matrix)
+    :param word_vectors: a genism keyed vectors object containing word embeddings
+    :return: a matrix of normalized doc embeddings (n docs X n embedding's dimension)
+    """
+    # set(vocab).difference(set(word_embeddings.index2word))
+    embedding_matrix = np.array([normalize_doc_vectors(word_vectors[word], axis=None)
+                                 if word in word_vectors else np.zeros(word_vectors.vector_size) for word in vocab])
+    doc_embeddings = normalize_doc_vectors(np.matmul(bow_matrix, embedding_matrix), axis=1)
+    return doc_embeddings
+
+
+def normalize_doc_vectors(doc_vectors, axis):
+    norms = la.norm(doc_vectors, axis=axis, keepdims=True)
+    if len(np.where(norms == 0)[0]):
+        warnings.warn(
+            str(np.where(norms == 0)[0].shape[0]) + " documents deleted because document embeddings was all zeros")
+        doc_vectors = np.delete(doc_vectors, np.where(norms == 0)[0], axis=0)
+        norms = np.delete(norms, np.where(norms == 0)[0], axis=0)
+    return doc_vectors / norms
+
 
 def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
     """Using a list of dataframes, create a corpus for each dataframe in the list c
