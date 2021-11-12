@@ -70,7 +70,6 @@ class VariableSimilarityCalculator:
 
         self.select_scores = select_scores
         self.score_cols = score_cols
-        self.cache = None
         self.file_name = None
 
     def init_cache(self, file_name=None):
@@ -139,7 +138,14 @@ class VariableSimilarityCalculator:
         cache = list(tqdm.tqdm(p.map(f, indices),
                                total=len(corpus_ref_indices)))
 
-        if not file_name:
+        if file_name:
+            cache = [y for x in cache for y in x]
+            with open(file_name, "a") as f:
+                for cols in cache:
+                    #cols = [d[col] for col in self.score_cols]
+                    f.write(",".join(cols))
+                    f.write("\n")
+        else:
             cache = [y for x in cache for y in x]
             result = pd.DataFrame(cache, columns=self.score_cols)
             return result
@@ -169,11 +175,12 @@ def cache_sim_scores(score_cols, ref_id, ref_var_scores, file_name=None):
 
 
 def append_cache(score_cols, ref_doc_id, paired_doc_id, score, file_name=None):
-    data = [ref_doc_id, paired_doc_id, score]
+    data = [ref_doc_id, paired_doc_id, str(score)]
     if file_name:
-        with open(file_name, "a") as f:
-            f.write(",".join(data))
-            f.write("\n")
+        return data
+        # with open(file_name, "a") as f:
+        #     f.write(",".join(data))
+        #     f.write("\n")
     else:
         return dict(zip(score_cols, data))
 
