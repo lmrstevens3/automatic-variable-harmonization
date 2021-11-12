@@ -16,6 +16,7 @@ import pandas as pd
 # noinspection PyProtectedMember
 from sklearn.metrics.pairwise import linear_kernel
 import numpy as np
+import math
 
 import multiprocessing as mp
 from functools import partial
@@ -124,18 +125,19 @@ class VariableSimilarityCalculator:
 
         p = mp.pool.ThreadPool(processes=num_cpus)
 
-        indices = list(enumerate(corpus_ref_indices))
-        f = partial(score_finder_helper,
-                    self.ref_ids,
-                    self.pairable,
-                    self.score_cols,
-                    self.select_scores,
-                    corpus_doc_ids,
-                    corpus_pair_indices,
-                    cosine_similarities,
-                    file_name)
-
-        cache = list(tqdm.tqdm(p.map(f, indices),
+        chunk_size = int(math.ceil(float(len(corpus_ref_indices)) / num_cpus))
+        print "Chunk size: " + str(chunk_size)
+        cache = list(tqdm.tqdm(p.map(partial(score_finder_helper,
+                                             self.ref_ids,
+                                             self.pairable,
+                                             self.score_cols,
+                                             self.select_scores,
+                                             corpus_doc_ids,
+                                             corpus_pair_indices,
+                                             cosine_similarities,
+                                             file_name),
+                                     enumerate(corpus_ref_indices),
+                                     chunk_size),
                                total=len(corpus_ref_indices)))
 
         if file_name:
