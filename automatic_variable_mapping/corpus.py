@@ -45,7 +45,7 @@ def calc_tfidf(corpora, vocabulary=None):
     return tf.vocabulary, tf.transform(corpus_all)
 
 
-def calc_doc_embeddings(bow_matrix, vocab, word_vectors):
+def calc_doc_embeddings(bow_matrix, vocab, word_vectors, corpora):
     """
     :param vocab: a list of unique words in the bow_matrix to extract embeddings for
     :param bow_matrix: a bag of words matrix representing the words in the corpora (full matrix, not sparse matrix)
@@ -55,18 +55,32 @@ def calc_doc_embeddings(bow_matrix, vocab, word_vectors):
     # set(vocab).difference(set(word_embeddings.index2word))
     embedding_matrix = np.array([normalize_doc_vectors(word_vectors[word], axis=None)
                                  if word in word_vectors else np.zeros(word_vectors.vector_size) for word in vocab])
-    doc_embeddings = normalize_doc_vectors(np.matmul(bow_matrix, embedding_matrix), axis=1)
-    return doc_embeddings
+    corpora, doc_embeddings = normalize_doc_vectors(np.matmul(bow_matrix, embedding_matrix), corpora=corpora, axis=1)
+    return corpora, doc_embeddings
 
 
-def normalize_doc_vectors(doc_vectors, axis):
+def normalize_doc_vectors(doc_vectors, corpora=None, axis=1):
     norms = la.norm(doc_vectors, axis=axis, keepdims=True)
+    if corpora:
+        corpora = [doc for c in corpora for doc, _ in c]
     if len(np.where(norms == 0)[0]):
-        warnings.warn(
-            str(np.where(norms == 0)[0].shape[0]) + " documents deleted because document embeddings was all zeros")
+        # warnings.warn(str(np.where(norms == 0)[0].shape[0]) + " documents deleted because document embeddings was all zeros")
+
+        print(str(np.where(norms == 0)[0].shape[0]) + " documents deleted because document embeddings was all zeros")
         doc_vectors = np.delete(doc_vectors, np.where(norms == 0)[0], axis=0)
+
+        if corpora:
+            # for i in np.where(norms == 0)[0]:
+            #     print corpora[i]
+
+            indices = np.where(norms != 0)[0]
+            corpora = [corpora[i] for i in indices]
         norms = np.delete(norms, np.where(norms == 0)[0], axis=0)
-    return doc_vectors / norms
+    doc_vectors = doc_vectors / norms
+    if corpora:
+        return corpora, doc_vectors
+    else:
+        return doc_vectors
 
 
 def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
