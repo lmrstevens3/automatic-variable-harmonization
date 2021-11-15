@@ -79,7 +79,7 @@ class VariableSimilarityCalculator:
                 f.write(",".join(self.score_cols))
                 f.write("\n")
 
-    def score_variables(self, corpora, tfidf, pair_ids=None, num_cpus=1, file_name=None):
+    def score_variables(self, corpus_doc_ids, tfidf, pair_ids=None, num_cpus=1, file_name=None):
         """
         The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
         with a score, for each variable as a pandas data frame.
@@ -87,10 +87,7 @@ class VariableSimilarityCalculator:
         :return: pandas data frame of the top_n (as specified by user) results for each variable
         """
 
-        corpus_doc_ids = [doc_id for doc_id, _ in corpora]
-
         print "Finding valid pair ids"
-
         if pair_ids is None:
             pair_ids = corpus_doc_ids
 
@@ -99,7 +96,7 @@ class VariableSimilarityCalculator:
         print "Pair ids: " + str(len(corpus_pair_indices))
 
         print "Finding valid ref ids"
-        corpus_ref_indices = [corpus_doc_ids.index(ref_id) for ref_id in self.ref_ids]
+        corpus_ref_indices = [corpus_doc_ids.index(ref_id) for ref_id in self.ref_ids if ref_id in corpus_doc_ids]
 
         print "Ref ids: " + str(len(corpus_ref_indices))
 
