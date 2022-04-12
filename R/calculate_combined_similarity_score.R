@@ -1,16 +1,18 @@
 library(dplyr)
 library(data.table)
+library(docstring)
 
-allScoresFile = '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/output/all_similarity_scores_manually_mapped_vars_FHS_CHS_MESA_ARIC.csv'
-allScoresData <- fread(allScoresFile, header = T, sep = ',', na.strings =  "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()), fill = TRUE)
+#Laura Stevens
+#project directory: ~/Dropbox/Graduate School/Data Integration and Harmonization/
 
-mannual_mapped_vars_file <- '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/data/manualConceptVariableMappings_dbGaP_Aim1_contVarNA_NLP.csv'
-mannual_map_vars_data <- fread(mannual_mapped_vars_file, header = T, sep = ',', na.strings = "", stringsAsFactors=FALSE, showProgress=getOption("datatable.showProgress", interactive()))
 
-allScoresData <- left_join(allScoresData, tbl_df(mannual_map_vars_data) %>% dplyr::select(conceptID, concept, dbGaP_studyID_datasetID_1, dbGaP_studyID_datasetID_varID_1))
-allScoresData <- allScoresData %>% group_by(concept) %>% filter(dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1)
-
-calcNoisyOR <- function(data, parent_col, child_cols){
+combine_scores <- function(data, parent_col, child_cols){
+    #' Calculates noisy or for parent and child columns a data frame. 
+    #' If 2 child columns provided noisy or is: 1-((1-parent)^(1+child1^2+child2^3)). If 3 child columns are provided 2 and 3rd child are both cubed. 
+    #' 
+    #' @param data: a dataframe containing parent and child columns  
+    #' @param parent_col: a column in data that contains ref ID's.
+    #' @param child_cols: a list of columns in data to use for the child cols (orderd by which child should provide the most influence on the final score).
     exp <- (1+data[[child_cols[1]]]^2+data[[child_cols[2]]]^3)
     if(length(child_cols) == 3){
         exp <- (1+data[[child_cols[1]]]^2+data[[child_cols[2]]]^3+data[[child_cols[3]]]^3)
@@ -19,34 +21,19 @@ calcNoisyOR <- function(data, parent_col, child_cols){
 }
 
 
-
-#add in noisy OR to combine scores- takes about 30 min for 21267777 rows
-combine_scores_params <- sapply(paste0("score_noisy", c("_euclidean", "_relativeDist", "_euclidean_concat", "_relativeDist_concat")), function(x){
-    child_cols <- c(gsub("_concat|score_noisy", "", paste0("score_codeLab",x)), "score_units", "score_descCodeLabUnits")
-    if(!grepl("_concat$", x)){child_cols = child_cols[-length(child_cols)]}
-    list("data" = as.name("data"), "parent_col" = "score_desc", "child_cols" = child_cols)
-}, simplify = F, USE.NAMES = T)
-
-timestamp()
-allScoresData <- tbl_df(allScoresData) %>% 
-    mutate(score_codeLab_euclidean = replace(score_euclidianDistanceScaled, score_euclidianDistanceScaled == 0, score_codeLab[score_euclidianDistanceScaled == 0]), 
-           score_codeLab_relativeDist = replace(score_relativeDistance, score_relativeDistance == 0, score_codeLab[score_relativeDistance == 0])) %>%  
-    mutate(., !!!purrr::imap(combine_scores_params, function(combine_score_params, name, data) name = do.call("calcNoisyOR", args = combine_score_params), data = .)) %>%
-    ungroup() %>% select(-score_euclidianDistance)
-        
-timestamp()
+calc_combined_scores <- function(scores_data,  parent_child_score_cols, coalesce_score_cols, file_out = NULL) { 
+    combine_score_cols <- unique(unlist(parent_child_score_cols, use.names = F))
+    scores_data <- scores_data %>% ungroup() %>%
+        mutate(map_dfc(coalesce_score_cols, ~coalesce(.y[,.x[1]], .y[,.x[2]]), .y = .)) %>% 
+        mutate(across(combine_score_cols , ~replace_na(.x, 0))) %>%  
+        mutate(map_dfc(parent_child_score_cols, ~combine_scores(.y, .x[1], .x[2:length(.x)]), .y = .))
+    if(length(file_out) > 0) {
+        data.table::fwrite(scores_data, file_out, sep = ',', qmethod = 'double', na = "", row.names = F)
+    }
+    return(scores_data)
+}
 
 
-#order columns
-score_cols <- c(grep("score_",colnames(allScoresData), value = T))
-allScoresData <- allScoresData[,c(colnames(allScoresData)[!colnames(allScoresData) %in% scoreCols], scoreCols)]
-sapply(allScoresData, function(x){sum(is.na(x))})
-#replace NAs is nes  score columns with 0 
-#allScoresData <- allScoresData %>% mutate_at(scoreCols, funs(replace(., is.na(.), 0)))
-fwrite(allScoresData, '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/all_similarity_and_combined_scores_manually_mapped_vars_FHS_CHS_MESA_ARIC.csv', sep = ',', qmethod = 'double', na = "", row.names = F)
 
-#create a subsetted sample scores files to play with combining scores
-subsetConcepts <- c("gender", "race_ethnicity",  "age", "diabetes", "smoke", "SBP", "DBP", "cholesterol_mg_dL",  "HTNmed", "BMI",  "coffee")
-scoresSubsetData <- allScoresData %>% filter(conceptID %in% subsetConcepts) %>% filter(dbGaP_studyID_datasetID_2 %in% dbGaP_studyID_datasetID_1) %>% dplyr::select(-matchID, -metadataID_1, -metadataID_2)
-dim(scoresSubsetData)
-fwrite(scoresSubsetData, '~/Dropbox/Graduate School/Data Integration and Harmonization/automated_variable_mapping/FHS_CHS_MESA_ARIC_all_similarity_scores_and_combined_scores_ManuallyMappedASCVDriskConcepts_2.17.20.csv', sep = ',', qmethod = 'double', na = "", row.names = F)
+
+
