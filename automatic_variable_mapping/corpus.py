@@ -82,6 +82,8 @@ def normalize_doc_vectors(doc_vectors, corpora=None, axis=1):
     else:
         return doc_vectors
 
+def normalize_doc_vectors_by_group(tfidf_matrix, groups):
+    return [la.norm(tfidf_matrix[group], 2, axis=0) for group in groups]
 
 def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
     """Using a list of dataframes, create a corpus for each dataframe in the list c
