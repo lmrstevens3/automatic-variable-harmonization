@@ -83,8 +83,13 @@ def normalize_doc_vectors(doc_vectors, corpora=None, axis=1):
     else:
         return doc_vectors
 
+def vec_top_words(vocab, vec, n):
+    return [vocab[i] for i in vec.argsort()[:(-1 - n):-1] if vec[i] != 0.0]
+
+
 def normalize_doc_vectors_by_group(tfidf_matrix, groups):
-    return [la.norm(tfidf_matrix[group], 2, axis=0) for group in groups]
+    return {group: la.norm(tfidf_matrix[group_indices], 2, axis=0) for group, group_indices in groups.items()}
+
 
 def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
     """Using a list of dataframes, create a corpus for each dataframe in the list c
