@@ -42,7 +42,8 @@ def calc_tfidf(corpora, vocabulary=None):
     # CREATE MATRIX AND VECTORIZE DATA
     corpora = [[doc for _, doc in corpus] for corpus in corpora]
     tf.fit(corpora)
-    return tf.vocabulary, tf.transform(corpus_all)
+    vocabulary = [k for k, _ in sorted(tf.vocabulary_.items(), key=lambda x:x[1])]
+    return vocabulary, tf.transform(corpus_all)
 
 
 def calc_doc_embeddings(bow_matrix, vocab, word_vectors, corpora):
