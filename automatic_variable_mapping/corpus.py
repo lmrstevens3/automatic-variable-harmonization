@@ -125,9 +125,11 @@ def build_corpus(doc_col, corpus_data, id_col, num_cpus=None):
 
     if num_cpus:
         pool = multiprocessing.Pool(processes=num_cpus)
-        corpus = list (tqdm.tqdm(pool.imap(partial(helper, doc_col), corpus_data[cols].as_matrix()), total=corpus_data.shape[0]))
+        corpus = list (tqdm.tqdm(pool.imap(partial(helper, doc_col),
+                                           corpus_data[cols].as_matrix()),
+                                 total=corpus_data.shape[0]))
     else:
-        corpus = [(row[len(doc_col)], lemmatize_variable_documentation(row[:-1])) for row in corpus_data[cols].values]
+        corpus = [helper(doc_col, row) for row in corpus_data[cols].values]
 
     # verify all rows were processed before returning data
     if len(corpus) != len(corpus_data):
