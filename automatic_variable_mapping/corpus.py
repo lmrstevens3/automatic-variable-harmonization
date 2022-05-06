@@ -130,9 +130,13 @@ def build_corpus(doc_col, corpus_data, id_col, num_cpus=None):
 
     if num_cpus:
         pool = multiprocessing.Pool(processes=num_cpus)
-        corpus = list (tqdm.tqdm(pool.imap(partial(helper, doc_col),
-                                           corpus_data[cols].as_matrix()),
-                                 total=corpus_data.shape[0]))
+        try:
+            corpus = list (tqdm.tqdm(pool.imap(partial(helper, doc_col),
+                                               corpus_data[cols].as_matrix()),
+                                     total=corpus_data.shape[0]))
+        finally:
+            pool.close()
+            pool.terminate()
     else:
         corpus = [helper(doc_col, row) for row in corpus_data[cols].values]
 
