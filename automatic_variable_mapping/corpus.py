@@ -88,7 +88,7 @@ def vec_top_words(vocab, vec, n):
 
 
 def normalize_doc_vectors_by_group(tfidf_matrix, groups):
-    return {group: la.norm(tfidf_matrix[group_indices], 2, axis=0) for group, group_indices in groups.items()}
+    return {group: np.mean(tfidf_matrix[group_indices], axis=0) for group, group_indices in groups.items()}
 
 
 def build_corpora(doc_col, corpora_data, id_col, num_cpus=None):
