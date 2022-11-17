@@ -1,5 +1,4 @@
 from unittest import TestCase
-
 import numpy as np
 import scipy.sparse as sp
 
@@ -129,12 +128,8 @@ class TestVariableSimilarityCalculator(TestCase):
     #     self.fail()
 
     def test_filter_scores(self):
-        v = VariableSimilarityCalculator(['x'])
-
         scores = [(1, 0.1188), (2, 0.1104), (3, 0)]
-
         result = list(filter_scores([], identity, scores, 'x'))
-
         assert result == scores
 
 

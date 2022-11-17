@@ -1,6 +1,7 @@
 name: avm2
 channels:
   - defaults
+  - conda-forge
 dependencies:
   - scikit-learn
   - nltk
