@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 from automatic_variable_mapping import corpus, vocab_similarity
 import pandas as pd
 from functools import partial
