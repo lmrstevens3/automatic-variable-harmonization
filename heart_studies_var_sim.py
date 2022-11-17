@@ -10,13 +10,6 @@
 # date: May 1, 2021
 ##########################################################################################
 
-
-import os
-import time
-
-import pandas as pd
-from gensim.models import KeyedVectors
-
 from automatic_variable_mapping import corpus, vocab_similarity
 from automatic_variable_mapping.vocab_similarity import default_pairable, partition
 
