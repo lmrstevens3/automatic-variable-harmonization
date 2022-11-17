@@ -111,18 +111,20 @@ summarize_predictions <- function(data, ref_cols, paired_ID_col, true_pairing_co
     #' @returns: data appended with columns topX_pred_pos, topX_true_pos for each x in pairing_rank_cutoffs.
     
     if(multiple_correction & length(paired_group_col) == 0) stop("paired_group_col required if multiple_correction = T")
-    
+    if(!rank_col %in% colnames(data)) stop("rank_col must be a column in data")
+    if(!true_pairing_col %in% colnames(data)) stop("true_pairing_col must be a column in data")
+     
     pred_cuts <- setNames(rank_cutoffs, paste0('top', rank_cutoffs, "_pred", sep = ""))
     true_pred_cols <- set_names(names(pred_cuts), gsub("pred", "true_pred", names(pred_cuts)))
 
     data %>% dplyr::group_by(across(all_of(ref_cols))) %>%
-        #calc booleans for valid predictions based on rank cutoff and true predictions
+        #calc boolean values for valid predictions based on rank cutoff and true predictions
         dplyr::mutate(across(all_of(rank_col), ~sum(!is.na(.x)), .names = "{.col}_pairs")) %>%
-        dplyr::filter(across(all_of(rank_col), ~(.x <= max(rank_cutoffs) | sum(is.na(.x)) == length(.x)))) %>% 
-        dplyr::ungroup() %>%
-        dplyr::mutate(map_dfc(pred_cuts, ~((!is.na(.y)) & .y <= .x), .y = .[[rank_col]])) %>%
+        dplyr::filter(if_all(all_of(rank_col), ~(.x <= max(rank_cutoffs) | sum(is.na(.x)) == length(.x)))) %>% 
+        dplyr::ungroup() %>% 
+        dplyr::mutate(map_dfc(pred_cuts, ~((!is.na(.y)) & .y <= .x), .y = .[[rank_col]])) %>% 
         dplyr::mutate(map_dfc(select(., all_of(true_pred_cols)), 
-                       ~calc_true_positives(.y, .x), .y = .[[true_pairing_col]])) %>%
+                       ~calc_true_positives(.y, .x), .y = .[[true_pairing_col]])) %>% 
         #calculate total predictions and true predictions for each refID
         dplyr::group_by(across(all_of(ref_cols))) %>%
         {if(multiple_correction) {
@@ -146,7 +148,7 @@ calc_precision <- function(true_positives, predicted_positives){
 }
 
 calc_recall <- function(true_positives, actual_positives){
-    true_positives/actual_positives
+    replace_na(true_positives/actual_positives, 0)
 }
 
 calc_F1 <- function(true_positives, predicted_positives, actual_positives, name = NULL){
@@ -192,7 +194,8 @@ calc_accuracy <- function(data, ref_ID_col, paired_ID_col, true_pairing_col, ran
         {if(remove_refID_stats) {
             dplyr::select(., any_of(class_col), matches("^n_"), -matches("n_.*in_group|same_group_pairs$")) 
         } else {.}} %>%
-        dplyr::ungroup() %>% unique()
+        dplyr::ungroup() %>% unique() %>% 
+        dplyr::arrange(across(any_of(c(class_col, ref_id_col))))
     
     #set F1 cols 
     pred_cols <- grep("top\\d+_pred", colnames(data), value = T)
@@ -211,10 +214,20 @@ calc_accuracy <- function(data, ref_ID_col, paired_ID_col, true_pairing_col, ran
     #calculate accuracy (F1) stats
     dplyr::bind_rows(totals, data) %>%
         dplyr::mutate(., pmap_dfc(list(true_pred_cols, pred_cols, actual_cols),
-                           ~calc_F1(..4[[..1]], ..4[[..2]], ..4[[..3]], gsub("true.*$", "", ..1)), ..4 = .)) %>% 
-        dplyr::select(any_of(c(class_col, ref_ID_col)), everything()) %>% 
-        dplyr::arrange(across(any_of(c(class_col, ref_id_col))))
+                           ~calc_F1(..4[[..1]], ..4[[..2]], ..4[[..3]], gsub("^n_|true.*$", "", ..1)), ..4 = .)) %>% 
+        dplyr::select(any_of(c(class_col, ref_ID_col)), everything()) 
     
+}
+
+combine_accuracy_results <- function(all_accuracy, totals_only = F, totals_col = "concept", totals_regex = "All concept") {
+    lapply(1:length(all_accuracy), function(x) {
+        all_accuracy[[x]] %>% 
+            select(concept, matches("_(?:precision|recall|F1)")) %>%
+            mutate(score_type = gsub("_|score|rank", "", names(all_accuracy)[x]))
+    }) %>% bind_rows(.) %>% 
+        {if(totals_only) {
+            filter(.,if_all(all_of(totals_col), ~grepl(totals_regex, .x)))
+        } else {.}}
 }
 
 #get accuracy differences
