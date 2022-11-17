@@ -1,17 +1,18 @@
 ##########################################################################################
 # vocab_similarity.py
-# author: TJ Callahan, Laura Stevens, Harrison Pielke-Lombardo
-# Purpose: script reads in a csv files of variable documentation including some or all of
-#           descriptions, units, as well as coding labels and pairs all variables against all other
-#           variables (except against themselves) and scores variable similarity in an attempt to
-#          identify which variables, using the documentation, are the most similar.
-# version 1.1.1
+# author: Laura Stevens, TJ Callahan, Harrison Pielke-Lombardo
+# Purpose: Creates a VariableSimilarityCalculator class and supporting functions to calculate cosine similarity for all
+#          pairs of variable, or document, vectors against each other in an attempt to identify which variables,
+#          or documents, are the most similar. The pairable functions specify which variables, or documents,
+#          should not be paired and scored. Select_scores functions allow for filtering of scores results, such as
+#          selecting a top set of scores or scores above a certain threshold.
+# version 1.1.2
 # python version: 2.7.13
-# date: 07.20.2020
+# date: May 1, 2021
 ##########################################################################################
 
 # read in needed libraries
-import nltk
+import numpy as np
 import pandas as pd
 # noinspection PyProtectedMember
 from sklearn.metrics.pairwise import linear_kernel
@@ -27,25 +28,26 @@ nltk.download('stopwords')
 nltk.download("wordnet")
 
 
-def calculate_similarity(tfidf_matrix, ref_var_index):
+def calculate_similarity(tfidf_matrix, ref_doc_index):
     """
+    If the VariableSimilarityCalculator is instantiated, matrix multiplication is used instead of this function.
     The function calculates the cosine similarity between the index variables and all other included variables in
-    the matrix. The results are sorted and returned as a list of lists, where each list contains a variable
-    identifier and the cosine similarity score for the top set of similar variables as indicated by the input
-    argument are returned.
+    the matrix. The results are sorted and returned as a list of lists, where each list contains a document
+    identifier and the cosine similarity score for the set of paired documents are returned.
 
     :param tfidf_matrix:
-    :param ref_var_index: an integer representing a variable id
-    :return: a list of lists where each list contains a variable identifier and the cosine similarity
-        score the top set of similar as indicated by the input argument are returned
+    :param ref_doc_index: an integer representing a document id
+    :return: a tuple with a ref doc index and a list of scored pairing tuples, each containing a paired doc index and
+    the similarity score for the tuple's paired doc index and the ref doc index
     """
 
     # calculate similarity
-    cosine_similarities = linear_kernel(tfidf_matrix[ref_var_index:ref_var_index + 1], tfidf_matrix).flatten()
-    rel_var_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_var_index]
-    similar_variables = [(variable, cosine_similarities[variable]) for variable in rel_var_indices]
-
+    # cosine_similarity ==  linear_kernel(m1,m2) because tfidf matrix is l2 normalized,unit vectors by default
+    cosine_similarities = linear_kernel(tfidf_matrix[ref_doc_index:ref_doc_index + 1], tfidf_matrix).flatten()
+    paired_doc_indices = [i for i in cosine_similarities.argsort()[::-1] if i != ref_doc_index]
+    similar_variables = [(paired_idx, cosine_similarities[paired_idx]) for paired_idx in paired_doc_indices]
     return similar_variables
+
 
 def identity(*args):
     return args
@@ -60,15 +62,16 @@ class VariableSimilarityCalculator:
     def __init__(self, ref_ids, pairable=identity, select_scores=scores_identity, score_cols=None):
         """
 
-        :param select_scores:
-        :param ref_ids: an iterable containing variable information used to filter results
-        containing the processed question definition
+        :param score_cols: column names that should be used in the cache or the results returned
+        :param select_scores: a function to return a selection of ids for each ref_id input (ex. top n scored pairings)
+        :param ref_ids: an iterable containing reference, document ids in a corpora that should be paired and scored
+        against all other documents
+
         """
         if not score_cols:
-            score_cols = ["reference var", "paired var", "score"]
+            score_cols = ["reference_id", "paired_id", "score"]
         self.ref_ids = ref_ids
-        self.pairable = pairable  # or vals_differ_in_col(id_col)
-
+        self.pairable = pairable
         self.select_scores = select_scores
         self.score_cols = score_cols
         self.file_name = None
@@ -83,15 +86,36 @@ class VariableSimilarityCalculator:
         """
         The function iterates over the corpus and returns the top_n (as specified by user) most similar variables,
         with a score, for each variable as a pandas data frame.
+        with a score, for each variable as a pandas data frame.
 
-        :return: pandas data frame of the top_n (as specified by user) results for each variable
+     Given a set of reference, doc_ids in a corpora, the cosine similarities for each reference, doc paired with
+         all other docs in doc_vectors is calculated for all reference docs. The pairings returned are then filtered
+         based on pairable and select_scores functions specified. The function implements the following:
+
+        1. Consolidate all ref_ids that need to be mapped
+        2. Subset doc_vectors matrix accordingly
+        3. In a single matrix multiplication operation, calculate cosine similarity between proposed doc_vectors sub-matrix and the whole doc_vectors matrix
+        4. Re-map ref_ids to cosine-similarity matrix and return pairing results
+
+        :param doc_ids: a list of doc ids for the documents represented in the doc_vectors matrix
+        :param doc_vectors: a vector representation of documents (e.g. bow matrix or embedding matrix)
+        :param cache: Either a file or, if left unspecified, a list
+        :return: If cache file is specified, results are written to a file, otherwise a pandas data frame is returned,
+         with reference_id (id of reference doc), paired_id (id of the paired doc), similarity score
         """
 
         print "Finding valid pair ids"
+
         if pair_ids is None:
             pair_ids = corpus_doc_ids
 
-        corpus_pair_indices = [corpus_doc_ids.index(pair_id) for pair_id in pair_ids]
+        corpus_pair_indices = list()
+        for pair_id in pair_ids:
+            pair_id = str(pair_id)
+            # get index of filter data in corpus
+            corpus_pair_idx = corpus_doc_ids.index(pair_id)
+            if corpus_pair_idx >= 0:
+                corpus_pair_indices.append(corpus_pair_idx)
 
         print "Pair ids: " + str(len(corpus_pair_indices))
 
@@ -366,3 +390,15 @@ if __name__ == "__main__":
     testData = pd.read_csv(varDocFile, sep=",", quotechar='"', na_values="",
                            low_memory=False)  # when reading in data, check
     #  to see if there is "\r" if # not then don't use "lineterminator='\n'", otherwise u
+    # READ IN DATA -- 07.17.19
+    testData = pd.read_csv(varDocFile, sep=",", quotechar='"', na_values="",
+                           low_memory=False)  # when reading in data, check
+    #  to see if there is "\r" if # not then don't use "lineterminator='\n'", otherwise u
+
+# select top pairings by a particular class/group
+def select_top_sims_by_group(ref_doc_scores, n, id_group_dict):
+    scores_grps = [(paired_id, score, id_group_dict[paired_id]) for paired_id, score in ref_doc_scores
+                   if paired_id in id_group_dict.keys()]
+    scores_groups = pd.DataFrame(scores_grps, columns=['paired_idx', 'score', 'group'])
+    top_scores_groups = scores_groups.sort_values(['group', 'score'], ascending=False).groupby(by='group').head(n)
+    return top_scores_groups[['paired_idx', 'score']].to_records(index=False).tolist()
