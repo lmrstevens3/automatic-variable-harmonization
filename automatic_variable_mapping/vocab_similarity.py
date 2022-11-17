@@ -122,134 +122,67 @@ class VariableSimilarityCalculator:
         # print "   Calculating Similarity Scores"
         cosine_similarities = np.matmul(doc_vectors, sub_vectors.transpose())
 
-        if cache:
-            with open(cache, "w") as f:
-                f.write(",".join(self.score_cols)+"\n")
-        else:
-            cache = []
+        # TODO HPL:
+        # run on GPU
+        # 1. Consolidate all ref_ids that need to be mapped
+        # 2. Subset tfidf matrix accordingly
+        # 3. In a single matrix multiplication operation, calculate cosine similarity between proposed tfidf submatrix and the whole tfidf matrix
+        # 4. Re-map ref_ids to cosine-similarity matrix
 
-        # print "   Getting Pairings for Ref IDs"
-        for ref_id_idx, similarities in izip(ref_id_indices, cosine_similarities.transpose()):
-            # print "Finding matches for", ref_doc_idx
-            ref_id = doc_ids[ref_id_idx]
-            paired_doc_indices = [i for i in similarities.argsort()[::-1] if i != ref_id_idx]
-            ref_doc_scores = [(doc_ids[paired_doc_idx], similarities[paired_doc_idx]) for paired_doc_idx in paired_doc_indices]
-            ref_doc_scores = self.select_scores(ref_doc_scores)
-            ref_doc_scores = filter_scores(self.pairable, ref_doc_scores, ref_id)
-            cache_sim_scores(cache, self.score_cols, ref_id, ref_doc_scores)
-        if isinstance(cache, list):
-            cache = pd.DataFrame(cache, columns=self.score_cols)
-            return cache
+        print "Finding valid pair ids"
 
+        if pair_ids is None:
+            pair_ids = corpus_doc_ids
 
-def cache_sim_scores(cache, score_cols, ref_id, ref_doc_scores):
-    # add all pairing scores for ref_id of reference doc
-    for paired_id, score in ref_doc_scores:
-        data = [ref_id, paired_id, score]
-        if isinstance(cache, list):
-            cache.append(dict(zip(score_cols, data)))
-        else:
-            # Assume cache is a file to write to.
-            with open(cache, "a") as f:
-                f.write(",".join([str(val) for val in data])+"\n")
+        corpus_pair_indices = list()
+        for pair_id in pair_ids:
+            pair_id = str(pair_id)
+            # get index of filter data in corpus
+            corpus_pair_idx = corpus_doc_ids.index(pair_id)
+            if corpus_pair_idx >= 0:
+                corpus_pair_indices.append(corpus_pair_idx)
 
+        print "Pair ids: " + str(len(corpus_pair_indices))
 
-def filter_scores(pairable, ref_doc_scores, ref_id):
-    return ((paired_id, score) for paired_id, score in ref_doc_scores
-            if pairable(score, paired_id, ref_id))
+        print "Finding valid ref ids"
+        corpus_ref_indices = list()
+        for ref_id in self.ref_ids:
+            ref_id = str(ref_id)
+            # get index of filter data in corpus
+            corpus_ref_idx = corpus_doc_ids.index(ref_id)
+            if corpus_ref_idx >= 0:
+                corpus_ref_indices.append(corpus_ref_idx)
 
+        print "Ref ids: " + str(len(corpus_ref_indices))
 
-# default pairable filters pairings with a score of 0 and self-pairings
-def default_pairable(score, paired_id, ref_id):
-    # checking paired_id != ref_id is checked in score_docs when
-    return score > 0 and paired_id != ref_id
+        # n = number of refs to find matches for
+        # m = size of embeddings
+        # k = number of possible ref matches
+        # pair tfiidf has shape [n, m]
+        # transposed ref tfidf has shape [m, k]
+        # [n, m] X [m, k] = [n, k]
 
+        print "Multiplying matrices"
+        pair_sub_tfidf = tfidf[corpus_pair_indices].toarray()
+        print "LHS: " + str(pair_sub_tfidf.shape)
+        ref_sub_tfidf = tfidf[corpus_ref_indices].toarray()
+        print "RHS: " + str(ref_sub_tfidf.shape)
+        cosine_similarities = np.matmul(ref_sub_tfidf, pair_sub_tfidf.transpose())
+        print "Sim Matrix: " + str(cosine_similarities.shape)
 
-# additional pairable functions to be used with or instead of default_pairable
-#   to use these functions, use partial from functools library. For example:
-#   pairable=partial(pairable_groups_disjoint, data=data, id_col = 'id', group_cols = 'group')
-def matching_groups(data, group_cols, id_col, pair_id, ref_id):
-    # check if pairings are part of the same class/group col in data used for corpora for one or multiple groups
-    ref_idx = data.loc[data[id_col] == ref_id].index[0]
-    pair_idx = data.loc[data[id_col] == pair_id].index[0]
-    return all([data[pair_idx][group_col] == data[ref_idx][group_col] for group_col in group_cols])
+        cache = list()
+        for col_idx, corpus_ref_idx in enumerate(corpus_ref_indices):
+            ref_id = corpus_doc_ids[corpus_ref_idx]
+            similarities_vec = cosine_similarities[col_idx]
+            # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
+            ref_var_scores = [(corpus_doc_ids[corpus_pair_indices[row_idx]], similarities_vec[row_idx])
+                              for row_idx in similarities_vec.argsort()[::-1]
+                              if corpus_doc_ids[corpus_pair_indices[row_idx]] != ref_id]
+            ref_var_scores = self.select_scores(ref_var_scores)
+            ref_var_scores = filter_scores(self.ref_ids, self.pairable, ref_var_scores, ref_id)
+            cache.append(cache_sim_scores(self.score_cols, ref_id, ref_var_scores))
 
-
-def pairable_groups_disjoint(data, group_cols, id_col, score, pair_id, ref_id):
-    # check that pairings are not part of the same class/group col for one or multiple groups
-    return default_pairable(score, pair_id, ref_id) and not matching_groups(data, group_cols, id_col, pair_id, ref_id)
-
-
-def pairable_groups_intersect(data, group_cols, id_col, score, pair_id, ref_id):
-    # check that pairings are not part of the same class/group col for one or multiple groups
-    return default_pairable(score, pair_id, ref_id) and matching_groups(data, group_cols, id_col, pair_id, ref_id)
-
-
-# select scores returns all scores by default, top n scores, or topn scores by group can use functions below
-            cache = [y for x in cache for y in x]
-        else:
-            # TODO HPL:
-            # run on GPU
-            # 1. Consolidate all ref_ids that need to be mapped
-            # 2. Subset tfidf matrix accordingly
-            # 3. In a single matrix multiplication operation, calculate cosine similarity between proposed tfidf submatrix and the whole tfidf matrix
-            # 4. Re-map ref_ids to cosine-similarity matrix
-
-            print "Finding valid pair ids"
-
-            if pair_ids is None:
-                pair_ids = corpus_doc_ids
-
-            corpus_pair_indices = list()
-            for pair_id in pair_ids:
-                pair_id = str(pair_id)
-                # get index of filter data in corpus
-                corpus_pair_idx = corpus_doc_ids.index(pair_id)
-                if corpus_pair_idx >= 0:
-                    corpus_pair_indices.append(corpus_pair_idx)
-
-            print "Pair ids: " + str(len(corpus_pair_indices))
-
-            print "Finding valid ref ids"
-            corpus_ref_indices = list()
-            for ref_id in self.ref_ids:
-                ref_id = str(ref_id)
-                # get index of filter data in corpus
-                corpus_ref_idx = corpus_doc_ids.index(ref_id)
-                if corpus_ref_idx >= 0:
-                    corpus_ref_indices.append(corpus_ref_idx)
-
-            print "Ref ids: " + str(len(corpus_ref_indices))
-
-            # n = number of refs to find matches for
-            # m = size of embeddings
-            # k = number of possible ref matches
-            # pair tfiidf has shape [n, m]
-            # transposed ref tfidf has shape [m, k]
-            # [n, m] X [m, k] = [n, k]
-
-            print "Multiplying matrices"
-            pair_sub_tfidf = tfidf[corpus_pair_indices].toarray()
-            print "LHS: " + str(pair_sub_tfidf.shape)
-            ref_sub_tfidf = tfidf[corpus_ref_indices].toarray()
-            print "RHS: " + str(ref_sub_tfidf.shape)
-            cosine_similarities = np.matmul(ref_sub_tfidf, pair_sub_tfidf.transpose())
-            print "Sim Matrix: " + str(cosine_similarities.shape)
-
-            cache = list()
-            for col_idx, corpus_ref_idx in enumerate(corpus_ref_indices):
-                ref_id = corpus_doc_ids[corpus_ref_idx]
-                print "Finding matches for", col_idx, corpus_ref_idx, ref_id
-                similarities_vec = cosine_similarities[col_idx]
-                # TODO HPL: I need to find a way to map the variable names to scores in the similarities_vec
-                ref_var_scores = [(corpus_doc_ids[corpus_pair_indices[row_idx]], similarities_vec[row_idx])
-                                  for row_idx in similarities_vec.argsort()[::-1]
-                                  if corpus_doc_ids[corpus_pair_indices[row_idx]] != ref_id]
-                ref_var_scores = self.select_scores(ref_var_scores)
-                ref_var_scores = filter_scores(self.ref_ids, self.pairable, ref_var_scores, ref_id)
-                cache.append(cache_sim_scores(self.score_cols, ref_id, ref_var_scores))
-
-            cache = [y for x in cache for y in x]
+        cache = [y for x in cache for y in x]
 
         result = pd.DataFrame(cache, columns=self.score_cols)
 
